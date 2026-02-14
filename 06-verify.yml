@@ -1,0 +1,25 @@
+---
+- name: Verify cluster
+  hosts: masters
+  become: yes
+  tasks:
+    - name: Wait for nodes
+      become_user: "{{ ansible_user }}"
+      shell: kubectl get nodes --no-headers | grep -v " Ready " | wc -l
+      environment:
+        KUBECONFIG: /home/{{ ansible_user }}/.kube/config
+      register: not_ready
+      until: not_ready.stdout == "0"
+      retries: 30
+      delay: 10
+ 
+    - name: Get nodes
+      become_user: "{{ ansible_user }}"
+      command: kubectl get nodes -o wide
+      environment:
+        KUBECONFIG: /home/{{ ansible_user }}/.kube/config
+      register: nodes
+ 
+    - name: Show nodes
+      debug:
+        var: nodes.stdout_lines

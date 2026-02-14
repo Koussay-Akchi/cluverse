@@ -1,0 +1,66 @@
+---
+- name: Common setup
+  hosts: k8s_cluster
+  become: yes
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+ 
+    - name: Install packages
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+        state: present
+ 
+    - name: Disable swap
+      command: swapoff -a
+ 
+    - name: Remove swap from fstab
+      lineinfile:
+        path: /etc/fstab
+        regexp: '.*swap.*'
+        state: absent
+ 
+    - name: Load overlay module
+      modprobe:
+        name: overlay
+        state: present
+ 
+    - name: Load br_netfilter module
+      modprobe:
+        name: br_netfilter
+        state: present
+ 
+    - name: Persist modules
+      copy:
+        content: |
+          overlay
+          br_netfilter
+        dest: /etc/modules-load.d/k8s.conf
+ 
+    - name: Set bridge-nf-call-iptables
+      sysctl:
+        name: net.bridge.bridge-nf-call-iptables
+        value: '1'
+        sysctl_file: /etc/sysctl.d/k8s.conf
+        reload: yes
+ 
+    - name: Set bridge-nf-call-ip6tables
+      sysctl:
+        name: net.bridge.bridge-nf-call-ip6tables
+        value: '1'
+        sysctl_file: /etc/sysctl.d/k8s.conf
+        reload: yes
+ 
+    - name: Set ip_forward
+      sysctl:
+        name: net.ipv4.ip_forward
+        value: '1'
+        sysctl_file: /etc/sysctl.d/k8s.conf
+        reload: yes
