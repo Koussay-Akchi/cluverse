@@ -1,0 +1,13 @@
+---
+alertmanager_smtp_server: "smtp.gmail.com:587"
+alertmanager_smtp_from: "contact.hexaflow@gmail.com"
+alertmanager_smtp_to: "contact.hexaflow@gmail.com"
+alertmanager_smtp_username: "contact.hexaflow@gmail.com"
+alertmanager_smtp_password: "skia nczv dqep zejw"
+
+grafana_admin_user: "admin"
+grafana_admin_password: "admin"
+
+prometheus_retention: "15d"
+prometheus_scrape_interval: "15s"
+prometheus_evaluation_interval: "15s"

@@ -1,0 +1,411 @@
+---
+- name: Install Grafana
+  hosts: masters
+  become: yes
+  tasks:
+    - name: Create grafana ConfigMap with datasources
+      shell: |
+        cat <<EOF | kubectl apply -f -
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: grafana-datasources
+          namespace: prometheus
+        data:
+          prometheus.yaml: |
+            apiVersion: 1
+            datasources:
+            - name: Prometheus
+              type: prometheus
+              access: proxy
+              url: http://prometheus:9090
+              isDefault: true
+              editable: true
+        EOF
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: grafana_datasources
+      changed_when: "'created' in grafana_datasources.stdout or 'configured' in grafana_datasources.stdout"
+
+    - name: Create grafana dashboards ConfigMap
+      shell: |
+        cat <<EOF | kubectl apply -f -
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: grafana-dashboards
+          namespace: prometheus
+        data:
+          dashboard-provider.yaml: |
+            apiVersion: 1
+            providers:
+            - name: 'default'
+              orgId: 1
+              folder: ''
+              type: file
+              disableDeletion: false
+              updateIntervalSeconds: 10
+              allowUiUpdates: true
+              options:
+                path: /var/lib/grafana/dashboards
+          kubernetes-cluster.json: |
+            {
+              "annotations": {
+                "list": [
+                  {
+                    "builtIn": 1,
+                    "datasource": "-- Grafana --",
+                    "enable": true,
+                    "hide": true,
+                    "iconColor": "rgba(0, 211, 255, 1)",
+                    "name": "Annotations & Alerts",
+                    "type": "dashboard"
+                  }
+                ]
+              },
+              "editable": true,
+              "gnetId": null,
+              "graphTooltip": 0,
+              "id": 1,
+              "links": [],
+              "panels": [
+                {
+                  "datasource": "Prometheus",
+                  "fieldConfig": {
+                    "defaults": {},
+                    "overrides": []
+                  },
+                  "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+                  "id": 1,
+                  "options": {
+                    "showLegend": true,
+                    "legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}
+                  },
+                  "targets": [
+                    {
+                      "expr": "up{job=\"kubernetes-nodes\"}",
+                      "interval": "",
+                      "legendFormat": "{{node}}",
+                      "refId": "A"
+                    }
+                  ],
+                  "title": "Node Status",
+                  "type": "timeseries"
+                },
+                {
+                  "datasource": "Prometheus",
+                  "fieldConfig": {
+                    "defaults": {},
+                    "overrides": []
+                  },
+                  "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+                  "id": 2,
+                  "options": {
+                    "showLegend": true,
+                    "legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}
+                  },
+                  "targets": [
+                    {
+                      "expr": "rate(node_cpu_seconds_total{mode!=\"idle\"}[5m])*100",
+                      "interval": "",
+                      "legendFormat": "{{node}}-{{mode}}",
+                      "refId": "A"
+                    }
+                  ],
+                  "title": "CPU Usage %",
+                  "type": "timeseries"
+                },
+                {
+                  "datasource": "Prometheus",
+                  "fieldConfig": {
+                    "defaults": {},
+                    "overrides": []
+                  },
+                  "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+                  "id": 3,
+                  "options": {
+                    "showLegend": true,
+                    "legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}
+                  },
+                  "targets": [
+                    {
+                      "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+                      "interval": "",
+                      "legendFormat": "{{node}}",
+                      "refId": "A"
+                    }
+                  ],
+                  "title": "Memory Usage %",
+                  "type": "timeseries"
+                },
+                {
+                  "datasource": "Prometheus",
+                  "fieldConfig": {
+                    "defaults": {},
+                    "overrides": []
+                  },
+                  "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+                  "id": 4,
+                  "options": {
+                    "showLegend": true,
+                    "legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}
+                  },
+                  "targets": [
+                    {
+                      "expr": "rate(node_network_receive_bytes_total[5m])",
+                      "interval": "",
+                      "legendFormat": "RX {{device}}",
+                      "refId": "A"
+                    },
+                    {
+                      "expr": "rate(node_network_transmit_bytes_total[5m])",
+                      "interval": "",
+                      "legendFormat": "TX {{device}}",
+                      "refId": "B"
+                    }
+                  ],
+                  "title": "Network I/O",
+                  "type": "timeseries"
+                },
+                {
+                  "datasource": "Prometheus",
+                  "fieldConfig": {
+                    "defaults": {},
+                    "overrides": []
+                  },
+                  "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+                  "id": 5,
+                  "options": {
+                    "showLegend": true,
+                    "legend": {"calcs": [], "displayMode": "table", "placement": "right"}
+                  },
+                  "targets": [
+                    {
+                      "expr": "count by (phase) (kube_pod_status_phase)",
+                      "interval": "",
+                      "legendFormat": "{{phase}}",
+                      "refId": "A"
+                    }
+                  ],
+                  "title": "Pod Status Distribution",
+                  "type": "timeseries"
+                },
+                {
+                  "datasource": "Prometheus",
+                  "fieldConfig": {
+                    "defaults": {},
+                    "overrides": []
+                  },
+                  "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+                  "id": 6,
+                  "targets": [
+                    {
+                      "expr": "prometheus_tsdb_symbol_table_size_bytes",
+                      "interval": "",
+                      "legendFormat": "{{instance}}",
+                      "refId": "A"
+                    }
+                  ],
+                  "title": "Prometheus Storage Size",
+                  "type": "stat"
+                },
+                {
+                  "datasource": "Prometheus",
+                  "fieldConfig": {
+                    "defaults": {},
+                    "overrides": []
+                  },
+                  "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+                  "id": 7,
+                  "options": {
+                    "showLegend": true,
+                    "legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}
+                  },
+                  "targets": [
+                    {
+                      "expr": "rate(http_requests_total[5m])",
+                      "interval": "",
+                      "legendFormat": "{{handler}}",
+                      "refId": "A"
+                    }
+                  ],
+                  "title": "HTTP Requests/sec",
+                  "type": "timeseries"
+                }
+              ],
+              "schemaVersion": 27,
+              "style": "dark",
+              "tags": ["kubernetes", "monitoring"],
+              "templating": {"list": []},
+              "time": {"from": "now-24h", "to": "now"},
+              "timepicker": {},
+              "timezone": "",
+              "title": "Kubernetes Cluster Overview",
+              "uid": "kubernetes-cluster",
+              "version": 1
+            }
+        EOF
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: grafana_dashboards
+      changed_when: "'created' in grafana_dashboards.stdout or 'configured' in grafana_dashboards.stdout"
+
+    - name: Deploy Grafana
+      shell: |
+        cat <<EOF | kubectl apply -f -
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: grafana
+          namespace: prometheus
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app: grafana
+          template:
+            metadata:
+              labels:
+                app: grafana
+            spec:
+              containers:
+              - name: grafana
+                image: grafana/grafana:latest
+                env:
+                - name: GF_SECURITY_ADMIN_PASSWORD
+                  value: "admin"
+                - name: GF_SECURITY_ADMIN_USER
+                  value: "admin"
+                - name: GF_PATHS_PROVISIONING
+                  value: "/etc/grafana/provisioning"
+                - name: GF_INSTALL_PLUGINS
+                  value: "grafana-piechart-panel"
+                ports:
+                - containerPort: 3000
+                  name: web
+                volumeMounts:
+                - name: datasources
+                  mountPath: /etc/grafana/provisioning/datasources
+                - name: dashboards-provider
+                  mountPath: /etc/grafana/provisioning/dashboards
+                - name: dashboards
+                  mountPath: /var/lib/grafana/dashboards
+                - name: storage
+                  mountPath: /var/lib/grafana
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 256Mi
+                  limits:
+                    cpu: 500m
+                    memory: 1Gi
+                livenessProbe:
+                  httpGet:
+                    path: /api/health
+                    port: 3000
+                  initialDelaySeconds: 30
+                  periodSeconds: 10
+                readinessProbe:
+                  httpGet:
+                    path: /api/health
+                    port: 3000
+                  initialDelaySeconds: 5
+                  periodSeconds: 5
+              volumes:
+              - name: datasources
+                configMap:
+                  name: grafana-datasources
+              - name: dashboards-provider
+                configMap:
+                  name: grafana-dashboards
+              - name: dashboards
+                configMap:
+                  name: grafana-dashboards
+              - name: storage
+                emptyDir: {}
+        ---
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: grafana
+          namespace: prometheus
+        spec:
+          selector:
+            app: grafana
+          ports:
+          - port: 3000
+            targetPort: 3000
+            name: web
+          type: NodePort
+        EOF
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: grafana_deploy
+      changed_when: "'created' in grafana_deploy.stdout or 'configured' in grafana_deploy.stdout"
+
+    - name: Wait for Grafana deployment
+      shell: kubectl rollout status deployment/grafana -n prometheus --kubeconfig=/etc/kubernetes/admin.conf
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      retries: 20
+      delay: 10
+
+    - name: Get Grafana NodePort
+      shell: kubectl get service grafana -n prometheus --kubeconfig=/etc/kubernetes/admin.conf -o jsonpath='{.spec.ports[0].nodePort}'
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: grafana_nodeport
+      changed_when: false
+
+    - name: Get Prometheus NodePort
+      shell: |
+        kubectl port-forward -n prometheus service/prometheus 9090:9090 --address 0.0.0.0 &
+        echo "Port forwarding started in background"
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Display Grafana Access Info
+      debug:
+        msg: |
+          Grafana is now deployed and accessible!
+          Default credentials: admin / admin
+          Access Grafana NodePort via: http://MASTER_NODE_IP:{{ grafana_nodeport.stdout }}
+          Grafana Service URL (internal): http://grafana.prometheus.svc.cluster.local:3000
+          Prometheus Service URL (internal): http://prometheus.prometheus.svc.cluster.local:9090
+          Alertmanager Service URL (internal): http://alertmanager.prometheus.svc.cluster.local:9093
+
+    - name: Create Grafana Alert notification channel
+      shell: |
+        cat <<EOF | kubectl apply -f -
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: grafana-alerting
+          namespace: prometheus
+        data:
+          alert-config.json: |
+            {
+              "alerting": {
+                "enabled": true,
+                "apply_default_classification": true,
+                "max_annotations_to_keep": 113,
+                "alertManagers": [
+                  {
+                    "uid": "alertmanager-uid",
+                    "name": "Alertmanager",
+                    "type": "prometheus",
+                    "url": "http://alertmanager:9093",
+                    "handleGrafanaAlert": true
+                  }
+                ]
+              }
+            }
+        EOF
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: grafana_alerting
+      changed_when: "'created' in grafana_alerting.stdout or 'configured' in grafana_alerting.stdout"
+      ignore_errors: yes
+
