@@ -3,40 +3,62 @@
   hosts: k8s_cluster
   become: yes
   tasks:
-    - name: Add Docker GPG key
-      apt_key:
+    - name: Create keyrings directory
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Download Docker GPG key
+      get_url:
         url: https://download.docker.com/linux/ubuntu/gpg
-        state: present
- 
+        dest: /tmp/docker-release.key
+      retries: 3
+      delay: 5
+
+    - name: Add Docker GPG key
+      shell: cat /tmp/docker-release.key | gpg --dearmor -o /etc/apt/keyrings/docker.gpg --yes
+      args:
+        creates: /etc/apt/keyrings/docker.gpg
+
     - name: Add Docker repository
       apt_repository:
-        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
         state: present
- 
+
     - name: Install containerd
       apt:
         name: containerd.io
         state: present
         update_cache: yes
- 
-    - name: Create containerd directory
+
+    - name: Create containerd config directory
       file:
         path: /etc/containerd
         state: directory
- 
-    - name: Generate containerd config
+        mode: '0755'
+
+    - name: Generate default containerd config
       shell: containerd config default > /etc/containerd/config.toml
       args:
         creates: /etc/containerd/config.toml
- 
-    - name: Enable SystemdCgroup
-      replace:
+
+    - name: Enable systemd cgroup driver for containerd 1.x
+      lineinfile:
         path: /etc/containerd/config.toml
-        regexp: 'SystemdCgroup = false'
-        replace: 'SystemdCgroup = true'
- 
+        regexp: '(\s*)SystemdCgroup\s*=\s*false'
+        line: '\1SystemdCgroup = true'
+        backrefs: yes
+
+    - name: Ensure cri is not disabled
+      lineinfile:
+        path: /etc/containerd/config.toml
+        regexp: 'disabled_plugins\s*=\s*\["cri"\]'
+        state: absent
+
     - name: Restart containerd
       systemd:
         name: containerd
         state: restarted
         enabled: yes
+        daemon_reload: yes

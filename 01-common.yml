@@ -7,8 +7,8 @@
       apt:
         update_cache: yes
         cache_valid_time: 3600
- 
-    - name: Install packages
+
+    - name: Install required packages
       apt:
         name:
           - apt-transport-https
@@ -16,51 +16,46 @@
           - curl
           - gnupg
           - lsb-release
+          - net-tools
+          - jq
         state: present
- 
+
     - name: Disable swap
       command: swapoff -a
- 
+      ignore_errors: yes
+
     - name: Remove swap from fstab
       lineinfile:
         path: /etc/fstab
-        regexp: '.*swap.*'
+        regexp: '.*\s+swap\s+.*'
         state: absent
- 
+
     - name: Load overlay module
       modprobe:
         name: overlay
         state: present
- 
+
     - name: Load br_netfilter module
       modprobe:
         name: br_netfilter
         state: present
- 
-    - name: Persist modules
+
+    - name: Persist kernel modules
       copy:
         content: |
           overlay
           br_netfilter
         dest: /etc/modules-load.d/k8s.conf
- 
-    - name: Set bridge-nf-call-iptables
-      sysctl:
-        name: net.bridge.bridge-nf-call-iptables
-        value: '1'
-        sysctl_file: /etc/sysctl.d/k8s.conf
-        reload: yes
- 
-    - name: Set bridge-nf-call-ip6tables
-      sysctl:
-        name: net.bridge.bridge-nf-call-ip6tables
-        value: '1'
-        sysctl_file: /etc/sysctl.d/k8s.conf
-        reload: yes
- 
-    - name: Set ip_forward
-      sysctl:
-        name: net.ipv4.ip_forward
-        value: '1'
-        sysctl_file: /etc/sysctl.d/k8s.conf
-        reload: yes
+        mode: '0644'
+
+    - name: Configure sysctl for Kubernetes
+      copy:
+        content: |
+          net.bridge.bridge-nf-call-iptables = 1
+          net.bridge.bridge-nf-call-ip6tables = 1
+          net.ipv4.ip_forward = 1
+        dest: /etc/sysctl.d/k8s.conf
+        mode: '0644'
+
+    - name: Apply sysctl settings
+      command: sysctl --system

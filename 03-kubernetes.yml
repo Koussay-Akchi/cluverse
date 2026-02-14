@@ -2,30 +2,30 @@
 - name: Install Kubernetes
   hosts: k8s_cluster
   become: yes
-  vars:
-    kubernetes_version: "1.29"
   tasks:
     - name: Create keyrings directory
       file:
         path: /etc/apt/keyrings
         state: directory
         mode: '0755'
- 
+
     - name: Download Kubernetes GPG key
       get_url:
         url: "https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/deb/Release.key"
         dest: /tmp/kubernetes-release.key
- 
+      retries: 3
+      delay: 5
+
     - name: Add Kubernetes GPG key
       shell: cat /tmp/kubernetes-release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg --yes
       args:
         creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
- 
+
     - name: Add Kubernetes repository
       apt_repository:
         repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/deb/ /"
         state: present
- 
+
     - name: Install kubelet kubeadm kubectl
       apt:
         name:
@@ -34,22 +34,22 @@
           - kubectl
         state: present
         update_cache: yes
- 
+
     - name: Hold kubelet
       dpkg_selections:
         name: kubelet
         selection: hold
- 
+
     - name: Hold kubeadm
       dpkg_selections:
         name: kubeadm
         selection: hold
- 
+
     - name: Hold kubectl
       dpkg_selections:
         name: kubectl
         selection: hold
- 
+
     - name: Enable kubelet
       systemd:
         name: kubelet

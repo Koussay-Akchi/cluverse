@@ -4,22 +4,33 @@
   become: yes
   tasks:
     - name: Wait for nodes
-      become_user: "{{ ansible_user }}"
-      shell: kubectl get nodes --no-headers | grep -v " Ready " | wc -l
+      shell: kubectl get nodes --no-headers 2>/dev/null | grep -c " Ready " || echo "0"
       environment:
-        KUBECONFIG: /home/{{ ansible_user }}/.kube/config
-      register: not_ready
-      until: not_ready.stdout == "0"
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: ready_nodes
+      until: ready_nodes.stdout | int > 0
       retries: 30
       delay: 10
- 
+
     - name: Get nodes
-      become_user: "{{ ansible_user }}"
       command: kubectl get nodes -o wide
       environment:
-        KUBECONFIG: /home/{{ ansible_user }}/.kube/config
+        KUBECONFIG: /etc/kubernetes/admin.conf
       register: nodes
- 
+
     - name: Show nodes
       debug:
         var: nodes.stdout_lines
+
+    - name: Wait for CoreDNS
+      shell: kubectl get pods -n kube-system -l k8s-app=kube-dns --field-selector=status.phase=Running 2>/dev/null | wc -l
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: coredns_ready
+      until: coredns_ready.stdout | int > 0
+      retries: 30
+      delay: 10
+
+    - name: Cluster status
+      debug:
+        msg: "Kubernetes cluster initialized successfully with {{ ready_nodes.stdout }} node(s) ready"

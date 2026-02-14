@@ -2,50 +2,54 @@
 - name: Initialize master
   hosts: masters
   become: yes
+  vars:
+    master_private_ip: "{{ hostvars[inventory_hostname].ansible_default_ipv4.address }}"
   tasks:
     - name: Check if initialized
       stat:
         path: /etc/kubernetes/admin.conf
       register: kubeadm_init
- 
+
     - name: Initialize cluster
-      command: >
-        kubeadm init
-        --apiserver-advertise-address={{ master_private_ip }}
-        --pod-network-cidr={{ pod_network_cidr }}
-        --ignore-preflight-errors=NumCPU,Mem
+      command: |
+        kubeadm init \
+        --apiserver-advertise-address={{ master_private_ip }} \
+        --pod-network-cidr={{ pod_network_cidr }} \
+        --kubernetes-version=v{{ kubernetes_version }}
+      environment:
+        PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       when: not kubeadm_init.stat.exists
- 
+
     - name: Create .kube directory
       file:
-        path: /home/{{ ansible_user }}/.kube
+        path: /root/.kube
         state: directory
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
- 
-    - name: Copy admin.conf
+        mode: '0700'
+
+    - name: Copy admin.conf to root
       copy:
         src: /etc/kubernetes/admin.conf
-        dest: /home/{{ ansible_user }}/.kube/config
+        dest: /root/.kube/config
         remote_src: yes
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
         mode: '0600'
- 
-    - name: Install Flannel
-      become_user: "{{ ansible_user }}"
+
+    - name: Install Flannel CNI
       command: kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
       environment:
-        KUBECONFIG: /home/{{ ansible_user }}/.kube/config
- 
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      retries: 3
+      delay: 5
+
     - name: Get join command
       command: kubeadm token create --print-join-command
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
       register: join_command
- 
+
     - name: Save join command
-      local_action:
-        module: copy
+      copy:
         content: "{{ join_command.stdout }}"
         dest: /tmp/kubeadm_join.sh
         mode: '0755'
+      delegate_to: localhost
       become: no

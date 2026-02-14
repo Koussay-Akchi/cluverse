@@ -7,12 +7,16 @@
       stat:
         path: /etc/kubernetes/kubelet.conf
       register: kubelet_conf
- 
+
     - name: Read join command
-      set_fact:
-        join_cmd: "{{ lookup('file', '/tmp/kubeadm_join.sh') }}"
+      slurp:
+        src: /tmp/kubeadm_join.sh
+      register: join_command_file
+      delegate_to: localhost
       when: not kubelet_conf.stat.exists
- 
+
     - name: Join cluster
-      command: "{{ join_cmd }}"
+      shell: "{{ join_command_file.content | b64decode }}"
+      environment:
+        PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       when: not kubelet_conf.stat.exists
