@@ -18,6 +18,7 @@
           - lsb-release
           - net-tools
           - jq
+          - wget
         state: present
 
     - name: Disable swap

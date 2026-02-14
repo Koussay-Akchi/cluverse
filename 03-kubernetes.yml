@@ -10,21 +10,25 @@
         mode: '0755'
 
     - name: Download Kubernetes GPG key
-      get_url:
-        url: "https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/deb/Release.key"
-        dest: /tmp/kubernetes-release.key
-      retries: 3
-      delay: 5
-
-    - name: Add Kubernetes GPG key
-      shell: cat /tmp/kubernetes-release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg --yes
+      shell: |
+        curl -fsSL https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
       args:
         creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+      retries: 5
+      delay: 10
+      register: key_result
+      until: key_result is not failed
 
     - name: Add Kubernetes repository
       apt_repository:
-        repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/deb/ /"
+        repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core%3A/stable%3A/v{{ kubernetes_version }}/deb/ /"
         state: present
+        update_cache: no
+
+    - name: Update apt cache after adding Kubernetes repo
+      apt:
+        update_cache: yes
+        cache_valid_time: 0
 
     - name: Install kubelet kubeadm kubectl
       apt:
@@ -33,7 +37,7 @@
           - kubeadm
           - kubectl
         state: present
-        update_cache: yes
+        update_cache: no
 
     - name: Hold kubelet
       dpkg_selections:

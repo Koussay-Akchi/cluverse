@@ -21,16 +21,27 @@
       args:
         creates: /etc/apt/keyrings/docker.gpg
 
+    - name: Remove existing Docker repository
+      file:
+        path: /etc/apt/sources.list.d/download_docker_com_linux_ubuntu.list
+        state: absent
+
     - name: Add Docker repository
       apt_repository:
         repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
         state: present
+        update_cache: no
+
+    - name: Update apt cache after adding Docker repo
+      apt:
+        update_cache: yes
+        cache_valid_time: 0
 
     - name: Install containerd
       apt:
         name: containerd.io
         state: present
-        update_cache: yes
+        update_cache: no
 
     - name: Create containerd config directory
       file:

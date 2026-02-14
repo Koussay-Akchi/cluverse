@@ -17,6 +17,7 @@
 
     - name: Join cluster
       shell: "{{ join_command_file.content | b64decode }}"
-      environment:
-        PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      register: join_result
+      retries: 3
+      delay: 10
       when: not kubelet_conf.stat.exists
