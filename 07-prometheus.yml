@@ -17,105 +17,50 @@
         state: directory
         mode: '0755'
 
-    - name: Create prometheus-rules.yml
-      copy:
-        dest: /etc/prometheus/rules.yml
-        content: |
-          groups:
-          - name: kubernetes.rules
-            interval: 30s
-            rules:
-            - alert: KubernetesNodeNotReady
-              expr: kube_node_status_condition{condition="Ready",status="true"} == 0
-              for: 5m
-              labels:
-                severity: critical
-                component: kubernetes
-              annotations:
-                summary: "Kubernetes Node not ready (instance {{ $labels.node }})"
-                description: "Node {{ $labels.node }} has been unready for a long time"
-
-            - alert: KubernetesMemoryPressure
-              expr: kube_node_status_condition{condition="MemoryPressure",status="true"} == 1
-              for: 5m
-              labels:
-                severity: warning
-                component: kubernetes
-              annotations:
-                summary: "Kubernetes memory pressure (instance {{ $labels.node }})"
-                description: "Node {{ $labels.node }} has MemoryPressure condition"
-
-            - alert: KubernetesDiskPressure
-              expr: kube_node_status_condition{condition="DiskPressure",status="true"} == 1
-              for: 5m
-              labels:
-                severity: warning
-                component: kubernetes
-              annotations:
-                summary: "Kubernetes disk pressure (instance {{ $labels.node }})"
-                description: "Node {{ $labels.node }} has DiskPressure condition"
-
-            - alert: KubernetesPodCrashLooping
-              expr: |
-                rate(kube_pod_container_status_restarts_total[15m]) > 0
-              for: 5m
-              labels:
-                severity: critical
-                component: kubernetes
-              annotations:
-                summary: "Kubernetes pod crash looping (instance {{ $labels.pod }})"
-                description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is crash looping"
-
-            - alert: KubernetesPodNotHealthy
-              expr: |
-                min_over_time(sum by(namespace, pod) (kube_pod_status_phase{phase=~"Pending|Unknown|Failed"})[15m:1m]) > 0
-              for: 15m
-              labels:
-                severity: critical
-                component: kubernetes
-              annotations:
-                summary: "Kubernetes pod not healthy (instance {{ $labels.pod }})"
-                description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has been in a non-running state for more than 15 minutes"
-
-            - alert: KubernetesContainerOomKiller
-              expr: kube_pod_container_status_last_terminated_reason == 1
-              for: 1m
-              labels:
-                severity: critical
-                component: kubernetes
-              annotations:
-                summary: "Kubernetes Container OOM killer (instance {{ $labels.pod }})"
-                description: "Container {{ $labels.container }} in pod {{ $labels.namespace }}/{{ $labels.pod }} has been OOMKilled"
-
-            - alert: PrometheusConfigReloadFailure
-              expr: prometheus_config_last_reload_successful == 0
-              for: 5m
-              labels:
-                severity: warning
-                component: prometheus
-              annotations:
-                summary: "Prometheus config reload failure"
-                description: "Prometheus configuration reload has failed"
-
-            - alert: PrometheusRuleEvaluationFailures
-              expr: increase(prometheus_rule_evaluation_failures_total[1m]) > 0
-              for: 5m
-              labels:
-                severity: warning
-                component: prometheus
-              annotations:
-                summary: "Prometheus rule evaluation failures"
-                description: "Prometheus has failed to evaluate rules"
-
-            - alert: PersistentVolumeclaimPending
-              expr: pvc_status_phase{phase="Pending"} == 1
-              for: 5m
-              labels:
-                severity: warning
-                component: kubernetes
-              annotations:
-                summary: "PersistentVolumeClaim pending (pvc {{ $labels.persistentvolumeclaim }})"
-                description: "PersistentVolumeClaim {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is pending"
+    - name: Create Prometheus ServiceAccount
+      shell: |
+        cat <<EOF | kubectl apply --validate=false -f -
+        apiVersion: v1
+        kind: ServiceAccount
+        metadata:
+          name: prometheus
+          namespace: prometheus
+        ---
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRole
+        metadata:
+          name: prometheus
+        rules:
+        - apiGroups: [""]
+          resources:
+          - nodes
+          - nodes/proxy
+          - services
+          - endpoints
+          - pods
+          verbs: ["get", "list", "watch"]
+        - apiGroups: ["extensions"]
+          resources:
+          - ingresses
+          verbs: ["get", "list", "watch"]
+        ---
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRoleBinding
+        metadata:
+          name: prometheus
+        roleRef:
+          apiGroup: rbac.authorization.k8s.io
+          kind: ClusterRole
+          name: prometheus
+        subjects:
+        - kind: ServiceAccount
+          name: prometheus
+          namespace: prometheus
+        EOF
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: rbac_result
+      changed_when: "'created' in rbac_result.stdout or 'configured' in rbac_result.stdout"
 
     - name: Create prometheus ConfigMap
       shell: |
@@ -141,7 +86,7 @@
               alertmanagers:
                 - static_configs:
                     - targets:
-                        - localhost:9093
+                        - alertmanager:9093
 
             scrape_configs:
               - job_name: 'prometheus'
@@ -235,6 +180,38 @@
                   - source_labels: [__meta_kubernetes_ingress_name]
                     action: replace
                     target_label: kubernetes_name
+
+          rules.yml: |
+            groups:
+            - name: kubernetes.rules
+              interval: 30s
+              rules:
+              - alert: KubernetesNodeNotReady
+                expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+                for: 5m
+                labels:
+                  severity: critical
+                annotations:
+                  summary: "Node {{ $labels.node }} not ready"
+                  description: "Node {{ $labels.node }} has been unready for a long time"
+
+              - alert: KubernetesMemoryPressure
+                expr: kube_node_status_condition{condition="MemoryPressure",status="true"} == 1
+                for: 5m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "Node {{ $labels.node }} memory pressure"
+                  description: "Node {{ $labels.node }} has MemoryPressure condition"
+
+              - alert: KubernetesDiskPressure
+                expr: kube_node_status_condition{condition="DiskPressure",status="true"} == 1
+                for: 5m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "Node {{ $labels.node }} disk pressure"
+                  description: "Node {{ $labels.node }} has DiskPressure condition"
         EOF
       environment:
         KUBECONFIG: /etc/kubernetes/admin.conf
@@ -276,9 +253,6 @@
                 volumeMounts:
                 - name: config
                   mountPath: /etc/prometheus
-                - name: rules
-                  mountPath: /etc/prometheus/rules.yml
-                  subPath: rules.yml
                 - name: storage
                   mountPath: /prometheus
                 resources:
@@ -290,9 +264,6 @@
                     memory: 1Gi
               volumes:
               - name: config
-                configMap:
-                  name: prometheus-config
-              - name: rules
                 configMap:
                   name: prometheus-config
               - name: storage
@@ -312,6 +283,7 @@
             name: web
           type: ClusterIP
         EOF
+        EOF
       environment:
         KUBECONFIG: /etc/kubernetes/admin.conf
       register: deploy_result
@@ -323,49 +295,3 @@
         KUBECONFIG: /etc/kubernetes/admin.conf
       retries: 15
       delay: 10
-
-    - name: Create Prometheus ServiceAccount
-      shell: |
-        cat <<EOF | kubectl apply -f -
-        apiVersion: v1
-        kind: ServiceAccount
-        metadata:
-          name: prometheus
-          namespace: prometheus
-        ---
-        apiVersion: rbac.authorization.k8s.io/v1
-        kind: ClusterRole
-        metadata:
-          name: prometheus
-        rules:
-        - apiGroups: [""]
-          resources:
-          - nodes
-          - nodes/proxy
-          - services
-          - endpoints
-          - pods
-          verbs: ["get", "list", "watch"]
-        - apiGroups: ["extensions"]
-          resources:
-          - ingresses
-          verbs: ["get", "list", "watch"]
-        ---
-        apiVersion: rbac.authorization.k8s.io/v1
-        kind: ClusterRoleBinding
-        metadata:
-          name: prometheus
-        roleRef:
-          apiGroup: rbac.authorization.k8s.io
-          kind: ClusterRole
-          name: prometheus
-        subjects:
-        - kind: ServiceAccount
-          name: prometheus
-          namespace: prometheus
-        EOF
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      ignore_errors: yes
-      register: rbac_result
-      changed_when: "'created' in rbac_result.stdout or 'configured' in rbac_result.stdout"
