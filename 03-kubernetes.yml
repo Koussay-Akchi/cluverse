@@ -5,9 +5,22 @@
   vars:
     kubernetes_version: "1.35.1"
   tasks:
+    - name: Create keyrings directory
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+    - name: Download Kubernetes GPG key
+      get_url:
+        url: "https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/deb/Release.key"
+        dest: /tmp/kubernetes-release.key
+    - name: Add Kubernetes GPG key
+      shell: cat /tmp/kubernetes-release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg --yes
+      args:
+        creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
     - name: Add Kubernetes repository
       apt_repository:
-        repo: "deb https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/deb/ /"
+        repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/deb/ /"
         state: present
     - name: Install kubelet kubeadm kubectl
       apt:
