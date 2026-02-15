@@ -65,6 +65,7 @@
     - name: Create prometheus ConfigMap
       shell: |
         cat <<EOF | kubectl apply -f -
+        {% raw %}
         apiVersion: v1
         kind: ConfigMap
         metadata:
@@ -192,8 +193,8 @@
                 labels:
                   severity: critical
                 annotations:
-                  summary: "Node {{ $$labels.node }} not ready"
-                  description: "Node {{ $$labels.node }} has been unready for a long time"
+                  summary: "Node {{ '$$labels.node' }} not ready"
+                  description: "Node {{ '$$labels.node' }} has been unready for a long time"
 
               - alert: KubernetesMemoryPressure
                 expr: kube_node_status_condition{condition="MemoryPressure",status="true"} == 1
@@ -201,8 +202,8 @@
                 labels:
                   severity: warning
                 annotations:
-                  summary: "Node {{ $$labels.node }} memory pressure"
-                  description: "Node {{ $$labels.node }} has MemoryPressure condition"
+                  summary: "Node {{ '$$labels.node' }} memory pressure"
+                  description: "Node {{ '$$labels.node' }} has MemoryPressure condition"
 
               - alert: KubernetesDiskPressure
                 expr: kube_node_status_condition{condition="DiskPressure",status="true"} == 1
@@ -210,8 +211,9 @@
                 labels:
                   severity: warning
                 annotations:
-                  summary: "Node {{ $$labels.node }} disk pressure"
-                  description: "Node {{ $$labels.node }} has DiskPressure condition"
+                  summary: "Node {{ '$$labels.node' }} disk pressure"
+                  description: "Node {{ '$$labels.node' }} has DiskPressure condition"
+        {% endraw %}
         EOF
       environment:
         KUBECONFIG: /etc/kubernetes/admin.conf
