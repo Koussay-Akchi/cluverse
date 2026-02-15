@@ -4,24 +4,38 @@
   become: yes
   vars:
     kubernetes_version: "1.35.1"
+    # pkgs.k8s.io uses one repo per minor version (e.g. v1.35 for 1.35.x)
+    k8s_repo_version: "v{{ kubernetes_version | regex_replace('^([0-9]+\\.[0-9]+).*', '\\1') }}"
   tasks:
     - name: Create keyrings directory
       file:
         path: /etc/apt/keyrings
         state: directory
         mode: '0755'
-    - name: Download Kubernetes GPG key
+
+    - name: Remove legacy Kubernetes apt repo (apt.kubernetes.io / kubernetes-xenial)
+      lineinfile:
+        path: "{{ item }}"
+        state: absent
+        regexp: 'apt\.kubernetes\.io|packages\.cloud\.google\.com|kubernetes-xenial'
+      loop:
+        - /etc/apt/sources.list
+        - /etc/apt/sources.list.d/kubernetes.list
+      ignore_errors: yes
+
+    - name: Download Kubernetes package repository signing key (pkgs.k8s.io)
       get_url:
-        url: "https://dl.k8s.io/apt/doc/apt-key.gpg"
-        dest: /tmp/kubernetes-release.key
+        url: "https://pkgs.k8s.io/core:/stable:/{{ k8s_repo_version }}/deb/Release.key"
+        dest: /tmp/kubernetes-Release.key
+
     - name: Add Kubernetes GPG key
-      shell: cat /tmp/kubernetes-release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg --yes
-      args:
-        creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-    - name: Add Kubernetes repository
+      shell: cat /tmp/kubernetes-Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg --yes
+
+    - name: Add Kubernetes repository (pkgs.k8s.io community-owned)
       apt_repository:
-        repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main"
+        repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/{{ k8s_repo_version }}/deb/ /"
         state: present
+        filename: kubernetes
     - name: Install kubelet kubeadm kubectl
       apt:
         name:
