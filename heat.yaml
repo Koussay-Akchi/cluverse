@@ -1,0 +1,434 @@
+heat_template_version: '2015-10-15'
+
+parameters:
+  flavor_id:
+    default: k8s-node
+    type: string
+  floating_network_ip:
+    default: c4e185dc-f55c-46f8-9080-61960acd5d37
+    type: string
+  image_id:
+    default: UbuntuNoble
+    type: string
+  key_name:
+    default: mykey
+    type: string
+  trusted_ssh_cidr:
+    default: 0.0.0.0/0
+    type: string
+  internal_cidr:
+    default: 10.8.1.0/24
+    type: string
+
+resources:
+  stack_base_security_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name:
+        list_join:
+          - '-'
+          - - { get_param: 'OS::stack_name' }
+            - 'base-security-group'
+      rules:
+        - protocol: tcp
+          port_range_min: 22
+          port_range_max: 22
+          remote_ip_prefix:
+            get_param: trusted_ssh_cidr
+          direction: ingress
+        - protocol: icmp
+          direction: ingress
+        - direction: egress
+          ethertype: IPv4
+        - direction: egress
+          ethertype: IPv6
+
+  web_security_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name:
+        list_join:
+          - '-'
+          - - { get_param: 'OS::stack_name' }
+            - 'web-security-group'
+      rules:
+        - protocol: tcp
+          port_range_min: 80
+          port_range_max: 80
+          remote_ip_prefix: 0.0.0.0/0
+          direction: ingress
+        - protocol: tcp
+          port_range_min: 443
+          port_range_max: 443
+          remote_ip_prefix: 0.0.0.0/0
+          direction: ingress
+
+  internal_communication_security_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name:
+        list_join:
+          - '-'
+          - - { get_param: 'OS::stack_name' }
+            - 'internal-communication-security-group'
+      rules:
+        - protocol: tcp
+          port_range_min: 1
+          port_range_max: 65535
+          remote_ip_prefix:
+            get_param: internal_cidr
+          direction: ingress
+        - protocol: udp
+          port_range_min: 1
+          port_range_max: 65535
+          remote_ip_prefix:
+            get_param: internal_cidr
+          direction: ingress
+
+  datastack_base_security_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name:
+        list_join:
+          - '-'
+          - - { get_param: 'OS::stack_name' }
+            - 'datastack-base-security-group'
+      rules:
+        - protocol: tcp
+          port_range_min: 3306
+          port_range_max: 3306
+          remote_ip_prefix:
+            get_param: internal_cidr
+          direction: ingress
+        - protocol: tcp
+          port_range_min: 5432
+          port_range_max: 5432
+          remote_ip_prefix:
+            get_param: internal_cidr
+          direction: ingress
+        - protocol: tcp
+          port_range_min: 27017
+          port_range_max: 27017
+          remote_ip_prefix:
+            get_param: internal_cidr
+          direction: ingress
+
+  custom_app_security_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name:
+        list_join:
+          - '-'
+          - - { get_param: 'OS::stack_name' }
+            - 'custom-app-security-group'
+      rules:
+        - protocol: tcp
+          port_range_min: 8080
+          port_range_max: 8080
+          remote_ip_prefix: 0.0.0.0/0
+          direction: ingress
+        - protocol: tcp
+          port_range_min: 3000
+          port_range_max: 3000
+          remote_ip_prefix:
+            get_param: internal_cidr
+          direction: ingress
+
+  kubernetes_security_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name:
+        list_join:
+          - '-'
+          - - { get_param: 'OS::stack_name' }
+            - 'kubernetes-security-group'
+      rules:
+        - protocol: tcp
+          port_range_min: 6443
+          port_range_max: 6443
+          remote_ip_prefix: 0.0.0.0/0
+          direction: ingress
+        - protocol: tcp
+          port_range_min: 2379
+          port_range_max: 2380
+          remote_ip_prefix:
+            get_param: internal_cidr
+          direction: ingress
+        - protocol: tcp
+          port_range_min: 10250
+          port_range_max: 10259
+          remote_ip_prefix:
+            get_param: internal_cidr
+          direction: ingress
+        - protocol: tcp
+          port_range_min: 30000
+          port_range_max: 32767
+          remote_ip_prefix: 0.0.0.0/0
+          direction: ingress
+        - protocol: udp
+          port_range_min: 8472
+          port_range_max: 8472
+          remote_ip_prefix:
+            get_param: internal_cidr
+          direction: ingress
+
+  monitoring_security_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name:
+        list_join:
+          - '-'
+          - - { get_param: 'OS::stack_name' }
+            - 'monitoring-security-group'
+      rules:
+        - protocol: tcp
+          port_range_min: 9090
+          port_range_max: 9090
+          remote_ip_prefix: 0.0.0.0/0
+          direction: ingress
+        - protocol: tcp
+          port_range_min: 3000
+          port_range_max: 3000
+          remote_ip_prefix: 0.0.0.0/0
+          direction: ingress
+        - protocol: tcp
+          port_range_min: 9100
+          port_range_max: 9100
+          remote_ip_prefix:
+            get_param: internal_cidr
+          direction: ingress
+
+  internal_net:
+    type: OS::Neutron::Net
+    properties:
+      name:
+        list_join:
+          - '-'
+          - - { get_param: 'OS::stack_name' }
+            - 'internal-network'
+
+  internal_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      name:
+        list_join:
+          - '-'
+          - - { get_param: 'OS::stack_name' }
+            - 'internal-subnet'
+      cidr: 10.8.1.0/24
+      dns_nameservers:
+        - 8.8.8.8
+        - 8.8.4.4
+      ip_version: 4
+      network_id:
+        get_resource: internal_net
+
+  internal_router:
+    type: OS::Neutron::Router
+    properties:
+      name:
+        list_join:
+          - '-'
+          - - { get_param: 'OS::stack_name' }
+            - 'router'
+      external_gateway_info:
+        network: c4e185dc-f55c-46f8-9080-61960acd5d37
+
+  internal_interface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id:
+        get_resource: internal_router
+      subnet_id:
+        get_resource: internal_subnet
+
+  internal_port_1:
+    type: OS::Neutron::Port
+    properties:
+      name:
+        list_join:
+          - '-'
+          - - { get_param: 'OS::stack_name' }
+            - 'port-1'
+      network_id:
+        get_resource: internal_net
+      fixed_ips:
+        - subnet_id:
+            get_resource: internal_subnet
+          ip_address: 10.8.1.10
+      security_groups:
+        - get_resource: stack_base_security_group
+        - get_resource: web_security_group
+        - get_resource: internal_communication_security_group
+        - get_resource: custom_app_security_group
+        - get_resource: kubernetes_security_group
+
+  internal_port_2:
+    type: OS::Neutron::Port
+    properties:
+      name:
+        list_join:
+          - '-'
+          - - { get_param: 'OS::stack_name' }
+            - 'port-2'
+      network_id:
+        get_resource: internal_net
+      fixed_ips:
+        - subnet_id:
+            get_resource: internal_subnet
+          ip_address: 10.8.1.11
+      security_groups:
+        - get_resource: stack_base_security_group
+        - get_resource: datastack_base_security_group
+        - get_resource: internal_communication_security_group
+        - get_resource: kubernetes_security_group
+
+  internal_port_5:
+    type: OS::Neutron::Port
+    properties:
+      name:
+        list_join:
+          - '-'
+          - - { get_param: 'OS::stack_name' }
+            - 'port-5'
+      network_id:
+        get_resource: internal_net
+      fixed_ips:
+        - subnet_id:
+            get_resource: internal_subnet
+          ip_address: 10.8.1.14
+      security_groups:
+        - get_resource: stack_base_security_group
+        - get_resource: monitoring_security_group
+        - get_resource: internal_communication_security_group
+
+  floating_ip_1:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network_id:
+        get_param: floating_network_ip
+
+  floating_ip_2:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network_id:
+        get_param: floating_network_ip
+
+  floating_ip_5:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network_id:
+        get_param: floating_network_ip
+
+  floating_ip_association_1:
+    type: OS::Neutron::FloatingIPAssociation
+    depends_on:
+      - internal_interface
+      - internal_port_1
+    properties:
+      floatingip_id:
+        get_resource: floating_ip_1
+      port_id:
+        get_resource: internal_port_1
+
+  floating_ip_association_2:
+    type: OS::Neutron::FloatingIPAssociation
+    depends_on:
+      - internal_interface
+      - internal_port_2
+    properties:
+      floatingip_id:
+        get_resource: floating_ip_2
+      port_id:
+        get_resource: internal_port_2
+
+  floating_ip_association_5:
+    type: OS::Neutron::FloatingIPAssociation
+    depends_on:
+      - internal_interface
+      - internal_port_5
+    properties:
+      floatingip_id:
+        get_resource: floating_ip_5
+      port_id:
+        get_resource: internal_port_5
+
+  demo_instance_1:
+    type: OS::Nova::Server
+    properties:
+      flavor:
+        get_param: flavor_id
+      image:
+        get_param: image_id
+      key_name:
+        get_param: key_name
+      name:
+        list_join:
+          - '-'
+          - - { get_param: 'OS::stack_name' }
+            - 'kube-master'
+      networks:
+        - port:
+            get_resource: internal_port_1
+      metadata:
+        group: masters
+
+  demo_instance_2:
+    type: OS::Nova::Server
+    properties:
+      flavor:
+        get_param: flavor_id
+      image:
+        get_param: image_id
+      key_name:
+        get_param: key_name
+      name:
+        list_join:
+          - '-'
+          - - { get_param: 'OS::stack_name' }
+            - 'kube-worker-1'
+      networks:
+        - port:
+            get_resource: internal_port_2
+      metadata:
+        group: workers
+
+  demo_instance_5:
+    type: OS::Nova::Server
+    properties:
+      flavor:
+        get_param: flavor_id
+      image:
+        get_param: image_id
+      key_name:
+        get_param: key_name
+      name:
+        list_join:
+          - '-'
+          - - { get_param: 'OS::stack_name' }
+            - 'kube-monitoring'
+      networks:
+        - port:
+            get_resource: internal_port_5
+      metadata:
+        group: monitors
+
+outputs:
+  kube_master_floating_ip:
+    value:
+      get_attr: [floating_ip_1, floating_ip_address]
+  kube_worker_1_floating_ip:
+    value:
+      get_attr: [floating_ip_2, floating_ip_address]
+  kube_monitoring_floating_ip:
+    value:
+      get_attr: [floating_ip_5, floating_ip_address]
+  kube_master_private_ip:
+    value:
+      get_attr: [internal_port_1, fixed_ips, 0, ip_address]
+  kube_worker_1_private_ip:
+    value:
+      get_attr: [internal_port_2, fixed_ips, 0, ip_address]
+  kube_monitoring_private_ip:
+    value:
+      get_attr: [internal_port_5, fixed_ips, 0, ip_address]

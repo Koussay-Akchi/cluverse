@@ -281,7 +281,7 @@
           - port: 9090
             targetPort: 9090
             name: web
-          type: ClusterIP
+          type: NodePort
         EOF
         EOF
       environment:

@@ -177,7 +177,7 @@
           - port: 9093
             targetPort: 9093
             name: web
-          type: ClusterIP
+          type: NodePort
         EOF
       environment:
         KUBECONFIG: /etc/kubernetes/admin.conf
