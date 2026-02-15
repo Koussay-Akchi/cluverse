@@ -280,9 +280,9 @@
           ports:
           - port: 9090
             targetPort: 9090
+            nodePort: 30090
             name: web
           type: NodePort
-        EOF
         EOF
       environment:
         KUBECONFIG: /etc/kubernetes/admin.conf
@@ -295,3 +295,17 @@
         KUBECONFIG: /etc/kubernetes/admin.conf
       retries: 15
       delay: 10
+
+    - name: Get Prometheus NodePort
+      shell: kubectl get service prometheus -n prometheus --kubeconfig=/etc/kubernetes/admin.conf -o jsonpath='{.spec.ports[0].nodePort}'
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: prometheus_nodeport
+      changed_when: false
+
+    - name: Display Prometheus Access Info
+      debug:
+        msg: |
+          Prometheus is now deployed and accessible!
+          Access Prometheus via: http://MASTER_NODE_IP:{{ prometheus_nodeport.stdout }}
+          Prometheus Service URL (internal): http://prometheus.prometheus.svc.cluster.local:9090

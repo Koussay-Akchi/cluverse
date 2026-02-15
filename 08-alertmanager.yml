@@ -176,6 +176,7 @@
           ports:
           - port: 9093
             targetPort: 9093
+            nodePort: 30093
             name: web
           type: NodePort
         EOF
@@ -363,3 +364,17 @@
         KUBECONFIG: /etc/kubernetes/admin.conf
       retries: 15
       delay: 10
+
+    - name: Get Alertmanager NodePort
+      shell: kubectl get service alertmanager -n prometheus --kubeconfig=/etc/kubernetes/admin.conf -o jsonpath='{.spec.ports[0].nodePort}'
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: alertmanager_nodeport
+      changed_when: false
+
+    - name: Display Alertmanager Access Info
+      debug:
+        msg: |
+          Alertmanager is now deployed and accessible!
+          Access Alertmanager via: http://MASTER_NODE_IP:{{ alertmanager_nodeport.stdout }}
+          Alertmanager Service URL (internal): http://alertmanager.prometheus.svc.cluster.local:9093

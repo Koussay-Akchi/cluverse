@@ -335,6 +335,7 @@
           ports:
           - port: 3000
             targetPort: 3000
+            nodePort: 30030
             name: web
           type: NodePort
         EOF
@@ -358,23 +359,45 @@
       changed_when: false
 
     - name: Get Prometheus NodePort
-      shell: |
-        kubectl port-forward -n prometheus service/prometheus 9090:9090 --address 0.0.0.0 &
-        echo "Port forwarding started in background"
+      shell: kubectl get service prometheus -n prometheus --kubeconfig=/etc/kubernetes/admin.conf -o jsonpath='{.spec.ports[0].nodePort}'
       environment:
         KUBECONFIG: /etc/kubernetes/admin.conf
-      ignore_errors: yes
+      register: prometheus_nodeport
       changed_when: false
+      ignore_errors: yes
 
-    - name: Display Grafana Access Info
+    - name: Get Alertmanager NodePort
+      shell: kubectl get service alertmanager -n prometheus --kubeconfig=/etc/kubernetes/admin.conf -o jsonpath='{.spec.ports[0].nodePort}'
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: alertmanager_nodeport
+      changed_when: false
+      ignore_errors: yes
+
+    - name: Display Access Information
       debug:
         msg: |
-          Grafana is now deployed and accessible!
+          ============================================
+          Monitoring Stack Deployed Successfully!
+          ============================================
+          
+          GRAFANA ACCESS:
+          External URL: http://MASTER_IP:{{ grafana_nodeport.stdout }}
           Default credentials: admin / admin
-          Access Grafana NodePort via: http://MASTER_NODE_IP:{{ grafana_nodeport.stdout }}
-          Grafana Service URL (internal): http://grafana.prometheus.svc.cluster.local:3000
-          Prometheus Service URL (internal): http://prometheus.prometheus.svc.cluster.local:9090
-          Alertmanager Service URL (internal): http://alertmanager.prometheus.svc.cluster.local:9093
+          
+          PROMETHEUS ACCESS:
+          External URL: http://MASTER_IP:{{ prometheus_nodeport.stdout }}
+          
+          ALERTMANAGER ACCESS:
+          External URL: http://MASTER_IP:{{ alertmanager_nodeport.stdout }}
+          
+          INTERNAL SERVICE URLS:
+          Grafana: http://grafana.prometheus.svc.cluster.local:3000
+          Prometheus: http://prometheus.prometheus.svc.cluster.local:9090
+          Alertmanager: http://alertmanager.prometheus.svc.cluster.local:9093
+          
+          Replace MASTER_IP with your master node's floating IP address
+          ============================================
 
     - name: Create Grafana Alert notification channel
       shell: |
@@ -408,4 +431,3 @@
       register: grafana_alerting
       changed_when: "'created' in grafana_alerting.stdout or 'configured' in grafana_alerting.stdout"
       ignore_errors: yes
-
