@@ -80,9 +80,8 @@
                   end_time = datetime.now()
                   start_time = end_time - timedelta(seconds=seconds)
                   
-                  # Calculate appropriate step size based on time range
-                  # Limit to ~100-200 data points for Prophet
-                  step_size = max(1, seconds // 100)
+                  # Calculate appropriate step size - aim for 60-120 data points
+                  step_size = max(1, seconds // 60)
                   
                   query = metric
                   params = {
@@ -118,78 +117,47 @@
                   
                   # Create and fit Prophet model
                   model = Prophet(
-                      daily_seasonality=True,
+                      daily_seasonality=False,
                       weekly_seasonality=False,
                       yearly_seasonality=False,
-                      changepoint_prior_scale=0.05
+                      changepoint_prior_scale=0.1
                   )
                   model.fit(df)
                   
-                  # Make future dataframe with same frequency as historical data
-                  # Calculate number of future periods based on average time delta
-                  avg_delta = (df['ds'].max() - df['ds'].min()) / len(df)
-                  future_periods = int(forecast_seconds / avg_delta.total_seconds())
-                  future = model.make_future_dataframe(periods=future_periods, freq=avg_delta)
+                  # Make future dataframe - calculate periods based on step size
+                  future_periods = max(1, forecast_seconds // step_size)
+                  future = model.make_future_dataframe(periods=future_periods, freq=f'{step_size}s')
                   forecast_data = model.predict(future)
                   
-                  # Create plotly graph
-                  fig = go.Figure()
-                  
-                  # Historical data
-                  fig.add_trace(go.Scatter(
-                      x=df['ds'],
-                      y=df['y'],
-                      mode='lines',
-                      name='Historical',
-                      line=dict(color='blue', width=2)
-                  ))
-                  
-                  # Forecast
+                  # Separate historical and forecast data
                   forecast_slice = forecast_data[forecast_data['ds'] > df['ds'].max()]
-                  fig.add_trace(go.Scatter(
-                      x=forecast_slice['ds'],
-                      y=forecast_slice['yhat'],
-                      mode='lines',
-                      name='Forecast',
-                      line=dict(color='red', width=2, dash='dash')
-                  ))
                   
-                  # Confidence interval
-                  fig.add_trace(go.Scatter(
-                      x=forecast_slice['ds'],
-                      y=forecast_slice['yhat_upper'],
-                      mode='lines',
-                      name='Upper Bound',
-                      line=dict(width=0),
-                      showlegend=False
-                  ))
+                  # Prepare data for frontend
+                  historical_times = df['ds'].dt.strftime('%Y-%m-%d %H:%M:%S').tolist()
+                  historical_values = df['y'].tolist()
                   
-                  fig.add_trace(go.Scatter(
-                      x=forecast_slice['ds'],
-                      y=forecast_slice['yhat_lower'],
-                      mode='lines',
-                      name='Confidence Interval',
-                      fill='tonexty',
-                      fillcolor='rgba(255,0,0,0.2)',
-                      line=dict(width=0)
-                  ))
-                  
-                  fig.update_layout(
-                      title=f'Forecast for {metric}',
-                      xaxis_title='Time',
-                      yaxis_title='Value',
-                      hovermode='x unified',
-                      template='plotly_white'
-                  )
+                  forecast_times = forecast_slice['ds'].dt.strftime('%Y-%m-%d %H:%M:%S').tolist()
+                  forecast_values = forecast_slice['yhat'].tolist()
+                  forecast_upper = forecast_slice['yhat_upper'].tolist()
+                  forecast_lower = forecast_slice['yhat_lower'].tolist()
                   
                   return jsonify({
-                      'plot': pio.to_json(fig),
+                      'historical': {
+                          'times': historical_times,
+                          'values': historical_values
+                      },
+                      'forecast': {
+                          'times': forecast_times,
+                          'values': forecast_values,
+                          'upper': forecast_upper,
+                          'lower': forecast_lower
+                      },
                       'stats': {
                           'data_points': len(df),
                           'forecast_points': len(forecast_slice),
                           'last_value': float(df['y'].iloc[-1]),
-                          'predicted_value': float(forecast_slice['yhat'].iloc[-1]),
-                          'trend': 'increasing' if forecast_slice['yhat'].iloc[-1] > df['y'].iloc[-1] else 'decreasing'
+                          'predicted_value': float(forecast_slice['yhat'].iloc[-1]) if len(forecast_slice) > 0 else 0,
+                          'trend': 'increasing' if len(forecast_slice) > 0 and forecast_slice['yhat'].iloc[-1] > df['y'].iloc[-1] else 'decreasing'
                       }
                   })
                   
@@ -574,9 +542,57 @@
                       `;
                       document.getElementById('stats').innerHTML = statsHtml;
                       
-                      // Display chart
-                      const plotData = JSON.parse(data.plot);
-                      Plotly.newPlot('chart', plotData.data, plotData.layout, {responsive: true});
+                      // Build Plotly chart from raw data
+                      const traces = [];
+                      
+                      // Historical data trace
+                      traces.push({
+                          x: data.historical.times,
+                          y: data.historical.values,
+                          mode: 'lines',
+                          name: 'Historical',
+                          line: {color: 'blue', width: 2}
+                      });
+                      
+                      // Forecast trace
+                      traces.push({
+                          x: data.forecast.times,
+                          y: data.forecast.values,
+                          mode: 'lines',
+                          name: 'Forecast',
+                          line: {color: 'red', width: 2, dash: 'dash'}
+                      });
+                      
+                      // Confidence interval - upper bound
+                      traces.push({
+                          x: data.forecast.times,
+                          y: data.forecast.upper,
+                          mode: 'lines',
+                          name: 'Upper Bound',
+                          line: {width: 0},
+                          showlegend: false
+                      });
+                      
+                      // Confidence interval - lower bound with fill
+                      traces.push({
+                          x: data.forecast.times,
+                          y: data.forecast.lower,
+                          mode: 'lines',
+                          name: 'Confidence Interval',
+                          fill: 'tonexty',
+                          fillcolor: 'rgba(255,0,0,0.2)',
+                          line: {width: 0}
+                      });
+                      
+                      const layout = {
+                          title: 'Prophet AI Forecast',
+                          xaxis: {title: 'Time'},
+                          yaxis: {title: 'Value'},
+                          hovermode: 'x unified',
+                          template: 'plotly_white'
+                      };
+                      
+                      Plotly.newPlot('chart', traces, layout, {responsive: true});
                       
                       // Show results
                       document.getElementById('results').classList.add('active');
