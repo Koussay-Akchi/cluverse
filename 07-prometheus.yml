@@ -130,7 +130,7 @@
                   - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
                     action: replace
                     regex: '([^:]+)(?::\d+)?;(\d+)'
-                    replacement: '$1:$2'
+                    replacement: '$$1:$$2'
                     target_label: __address__
 
               - job_name: 'kubernetes-services'
@@ -168,7 +168,7 @@
                   - source_labels: [__meta_kubernetes_ingress_scheme,__address__,__meta_kubernetes_ingress_path]
                     action: replace
                     regex: '([^:]+)(?::\d+)?;(.*);(.*)'
-                    replacement: '${1}://${2}${3}'
+                    replacement: '$${1}://$${2}$${3}'
                     target_label: __param_target
                   - target_label: __address__
                     replacement: localhost:9115
@@ -192,8 +192,8 @@
                 labels:
                   severity: critical
                 annotations:
-                  summary: "Node {{ $labels.node }} not ready"
-                  description: "Node {{ $labels.node }} has been unready for a long time"
+                  summary: "Node {{ $$labels.node }} not ready"
+                  description: "Node {{ $$labels.node }} has been unready for a long time"
 
               - alert: KubernetesMemoryPressure
                 expr: kube_node_status_condition{condition="MemoryPressure",status="true"} == 1
@@ -201,8 +201,8 @@
                 labels:
                   severity: warning
                 annotations:
-                  summary: "Node {{ $labels.node }} memory pressure"
-                  description: "Node {{ $labels.node }} has MemoryPressure condition"
+                  summary: "Node {{ $$labels.node }} memory pressure"
+                  description: "Node {{ $$labels.node }} has MemoryPressure condition"
 
               - alert: KubernetesDiskPressure
                 expr: kube_node_status_condition{condition="DiskPressure",status="true"} == 1
@@ -210,8 +210,8 @@
                 labels:
                   severity: warning
                 annotations:
-                  summary: "Node {{ $labels.node }} disk pressure"
-                  description: "Node {{ $labels.node }} has DiskPressure condition"
+                  summary: "Node {{ $$labels.node }} disk pressure"
+                  description: "Node {{ $$labels.node }} has DiskPressure condition"
         EOF
       environment:
         KUBECONFIG: /etc/kubernetes/admin.conf
