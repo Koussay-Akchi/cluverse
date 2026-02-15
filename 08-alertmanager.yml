@@ -88,32 +88,32 @@
               auth_password: '{{ smtp_password }}'
               require_tls: true
               headers:
-                Subject: '[Kubernetes] Alert: {{ .GroupLabels.alertname }}'
+                Subject: '[Kubernetes] Alert: {{ "{{" }} .GroupLabels.alertname {{ "}}" }}'
               html: |
                 <h2>Alert Summary</h2>
-                <p><strong>Cluster:</strong> {{ .GroupLabels.cluster }}</p>
-                <p><strong>Status:</strong> {{ .Status }}</p>
-                <p><strong>Alerts Count:</strong> {{ len .Alerts }}</p>
+                <p><strong>Cluster:</strong> {{ "{{" }} .GroupLabels.cluster {{ "}}" }}</p>
+                <p><strong>Status:</strong> {{ "{{" }} .Status {{ "}}" }}</p>
+                <p><strong>Alerts Count:</strong> {{ "{{" }} len .Alerts {{ "}}" }}</p>
                 <h3>Firing Alerts</h3>
-                {{ range .Alerts.Firing }}
+                {{ "{{" }} range .Alerts.Firing {{ "}}" }}
                 <div style="border: 1px solid #ddd; margin: 10px 0; padding: 10px;">
-                  <p><strong>{{ .Labels.alertname }}</strong></p>
-                  <p>Severity: <span style="color: red;">{{ .Labels.severity }}</span></p>
-                  <p>Instance: {{ .Labels.instance }}</p>
-                  <p>{{ .Annotations.description }}</p>
-                  <p style="font-size: 0.9em; color: #666;">{{ .StartsAt }}</p>
+                  <p><strong>{{ "{{" }} .Labels.alertname {{ "}}" }}</strong></p>
+                  <p>Severity: <span style="color: red;">{{ "{{" }} .Labels.severity {{ "}}" }}</span></p>
+                  <p>Instance: {{ "{{" }} .Labels.instance {{ "}}" }}</p>
+                  <p>{{ "{{" }} .Annotations.description {{ "}}" }}</p>
+                  <p style="font-size: 0.9em; color: #666;">{{ "{{" }} .StartsAt {{ "}}" }}</p>
                 </div>
-                {{ end }}
+                {{ "{{" }} end {{ "}}" }}
                 <h3>Resolved Alerts</h3>
-                {{ range .Alerts.Resolved }}
+                {{ "{{" }} range .Alerts.Resolved {{ "}}" }}
                 <div style="border: 1px solid #ddd; margin: 10px 0; padding: 10px;">
-                  <p><strong>{{ .Labels.alertname }}</strong></p>
-                  <p>Severity: <span style="color: green;">{{ .Labels.severity }}</span></p>
-                  <p>Instance: {{ .Labels.instance }}</p>
-                  <p>{{ .Annotations.description }}</p>
-                  <p style="font-size: 0.9em; color: #666;">Resolved at {{ .EndsAt }}</p>
+                  <p><strong>{{ "{{" }} .Labels.alertname {{ "}}" }}</strong></p>
+                  <p>Severity: <span style="color: green;">{{ "{{" }} .Labels.severity {{ "}}" }}</span></p>
+                  <p>Instance: {{ "{{" }} .Labels.instance {{ "}}" }}</p>
+                  <p>{{ "{{" }} .Annotations.description {{ "}}" }}</p>
+                  <p style="font-size: 0.9em; color: #666;">Resolved at {{ "{{" }} .EndsAt {{ "}}" }}</p>
                 </div>
-                {{ end }}
+                {{ "{{" }} end {{ "}}" }}
 
           - name: 'email-critical'
             email_configs:
@@ -124,7 +124,7 @@
               auth_password: '{{ smtp_password }}'
               require_tls: true
               headers:
-                Subject: '[CRITICAL] {{ .GroupLabels.alertname }} - IMMEDIATE ACTION REQUIRED'
+                Subject: '[CRITICAL] {{ "{{" }} .GroupLabels.alertname {{ "}}" }} - IMMEDIATE ACTION REQUIRED'
 
           - name: 'email-warning'
             email_configs:
@@ -135,7 +135,7 @@
               auth_password: '{{ smtp_password }}'
               require_tls: true
               headers:
-                Subject: '[WARNING] {{ .GroupLabels.alertname }}'
+                Subject: '[WARNING] {{ "{{" }} .GroupLabels.alertname {{ "}}" }}'
 
           inhibit_rules:
             - source_match:
