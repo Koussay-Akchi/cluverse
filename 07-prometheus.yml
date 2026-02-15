@@ -85,7 +85,7 @@
 
             - job_name: 'kubernetes-apiservers'
               kubernetes_sd_configs:
-                - api_server: https://{{ groups['masters'][0] }}:6443
+                - api_server: https://{{ hostvars[groups['masters'][0]].ansible_host }}:6443
                   role: endpoints
                   tls_config:
                     insecure_skip_verify: true
@@ -101,7 +101,7 @@
 
             - job_name: 'kubernetes-nodes'
               kubernetes_sd_configs:
-                - api_server: https://{{ groups['masters'][0] }}:6443
+                - api_server: https://{{ hostvars[groups['masters'][0]].ansible_host }}:6443
                   role: node
                   tls_config:
                     insecure_skip_verify: true
@@ -116,7 +116,7 @@
 
             - job_name: 'kubernetes-pods'
               kubernetes_sd_configs:
-                - api_server: https://{{ groups['masters'][0] }}:6443
+                - api_server: https://{{ hostvars[groups['masters'][0]].ansible_host }}:6443
                   role: pod
                   tls_config:
                     insecure_skip_verify: true
@@ -145,7 +145,7 @@
 
             - job_name: 'kubernetes-cadvisor'
               kubernetes_sd_configs:
-                - api_server: https://{{ groups['masters'][0] }}:6443
+                - api_server: https://{{ hostvars[groups['masters'][0]].ansible_host }}:6443
                   role: node
                   tls_config:
                     insecure_skip_verify: true
@@ -161,7 +161,7 @@
 
             - job_name: 'kube-state-metrics'
               kubernetes_sd_configs:
-                - api_server: https://{{ groups['masters'][0] }}:6443
+                - api_server: https://{{ hostvars[groups['masters'][0]].ansible_host }}:6443
                   role: service
                   tls_config:
                     insecure_skip_verify: true
@@ -179,7 +179,7 @@
 
             - job_name: 'node-exporter'
               kubernetes_sd_configs:
-                - api_server: https://{{ groups['masters'][0] }}:6443
+                - api_server: https://{{ hostvars[groups['masters'][0]].ansible_host }}:6443
                   role: pod
                   tls_config:
                     insecure_skip_verify: true
@@ -214,8 +214,8 @@
               labels:
                 severity: critical
               annotations:
-                summary: "Node {{ $labels.node }} not ready"
-                description: "Node {{ $labels.node }} has been unready for a long time"
+                summary: "Node {{ "{{" }} $labels.node {{ "}}" }} not ready"
+                description: "Node {{ "{{" }} $labels.node {{ "}}" }} has been unready for a long time"
 
             - alert: KubernetesMemoryPressure
               expr: kube_node_status_condition{condition="MemoryPressure",status="true"} == 1
@@ -223,8 +223,8 @@
               labels:
                 severity: warning
               annotations:
-                summary: "Node {{ $labels.node }} memory pressure"
-                description: "Node {{ $labels.node }} has MemoryPressure condition"
+                summary: "Node {{ "{{" }} $labels.node {{ "}}" }} memory pressure"
+                description: "Node {{ "{{" }} $labels.node {{ "}}" }} has MemoryPressure condition"
 
             - alert: KubernetesDiskPressure
               expr: kube_node_status_condition{condition="DiskPressure",status="true"} == 1
@@ -232,8 +232,8 @@
               labels:
                 severity: warning
               annotations:
-                summary: "Node {{ $labels.node }} disk pressure"
-                description: "Node {{ $labels.node }} has DiskPressure condition"
+                summary: "Node {{ "{{" }} $labels.node {{ "}}" }} disk pressure"
+                description: "Node {{ "{{" }} $labels.node {{ "}}" }} has DiskPressure condition"
 
             - alert: KubernetesPodCrashLooping
               expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
@@ -241,8 +241,8 @@
               labels:
                 severity: warning
               annotations:
-                summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is crash looping"
-                description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has restarted {{ $value }} times in the last 15 minutes"
+                summary: "Pod {{ "{{" }} $labels.namespace {{ "}}" }}/{{ "{{" }} $labels.pod {{ "}}" }} is crash looping"
+                description: "Pod {{ "{{" }} $labels.namespace {{ "}}" }}/{{ "{{" }} $labels.pod {{ "}}" }} has restarted {{ "{{" }} $value {{ "}}" }} times in the last 15 minutes"
 
             - alert: KubernetesNodeHighCPU
               expr: (100 - (avg by (node) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 80
@@ -250,8 +250,8 @@
               labels:
                 severity: warning
               annotations:
-                summary: "Node {{ $labels.node }} high CPU usage"
-                description: "Node {{ $labels.node }} has CPU usage above 80% for more than 10 minutes"
+                summary: "Node {{ "{{" }} $labels.node {{ "}}" }} high CPU usage"
+                description: "Node {{ "{{" }} $labels.node {{ "}}" }} has CPU usage above 80% for more than 10 minutes"
 
             - alert: KubernetesNodeHighMemory
               expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
@@ -259,8 +259,8 @@
               labels:
                 severity: warning
               annotations:
-                summary: "Node {{ $labels.node }} high memory usage"
-                description: "Node {{ $labels.node }} has memory usage above 85% for more than 10 minutes"
+                summary: "Node {{ "{{" }} $labels.node {{ "}}" }} high memory usage"
+                description: "Node {{ "{{" }} $labels.node {{ "}}" }} has memory usage above 85% for more than 10 minutes"
         dest: /etc/prometheus/rules.yml
         owner: prometheus
         group: prometheus
@@ -463,13 +463,20 @@
             spec:
               hostNetwork: true
               hostPID: true
+              tolerations:
+              - key: node-role.kubernetes.io/control-plane
+                operator: Exists
+                effect: NoSchedule
+              - key: node-role.kubernetes.io/master
+                operator: Exists
+                effect: NoSchedule
               containers:
               - name: node-exporter
                 image: prom/node-exporter:latest
                 args:
                   - '--path.procfs=/host/proc'
                   - '--path.sysfs=/host/sys'
-                  - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$$$|/)'
+                  - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
                 ports:
                 - containerPort: 9100
                   name: metrics
@@ -507,41 +514,16 @@
       run_once: true
       delegate_to: "{{ api_master }}"
 
+    - name: Wait for node-exporter to be ready
+      shell: kubectl rollout status daemonset/node-exporter -n kube-system --timeout=120s --kubeconfig=/etc/kubernetes/admin.conf
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      run_once: true
+      delegate_to: "{{ api_master }}"
+
     - name: Deploy kube-state-metrics
       shell: |
         cat <<EOF | kubectl apply -f -
-        apiVersion: apps/v1
-        kind: Deployment
-        metadata:
-          name: kube-state-metrics
-          namespace: kube-system
-          labels:
-            app: kube-state-metrics
-        spec:
-          replicas: 1
-          selector:
-            matchLabels:
-              app: kube-state-metrics
-          template:
-            metadata:
-              labels:
-                app: kube-state-metrics
-            spec:
-              serviceAccountName: kube-state-metrics
-              containers:
-              - name: kube-state-metrics
-                image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.12.0
-                ports:
-                - containerPort: 8080
-                  name: http-metrics
-                resources:
-                  requests:
-                    cpu: 50m
-                    memory: 64Mi
-                  limits:
-                    cpu: 200m
-                    memory: 256Mi
-        ---
         apiVersion: v1
         kind: ServiceAccount
         metadata:
@@ -597,6 +579,38 @@
           name: kube-state-metrics
           namespace: kube-system
         ---
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: kube-state-metrics
+          namespace: kube-system
+          labels:
+            app: kube-state-metrics
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app: kube-state-metrics
+          template:
+            metadata:
+              labels:
+                app: kube-state-metrics
+            spec:
+              serviceAccountName: kube-state-metrics
+              containers:
+              - name: kube-state-metrics
+                image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.12.0
+                ports:
+                - containerPort: 8080
+                  name: http-metrics
+                resources:
+                  requests:
+                    cpu: 50m
+                    memory: 64Mi
+                  limits:
+                    cpu: 200m
+                    memory: 256Mi
+        ---
         apiVersion: v1
         kind: Service
         metadata:
@@ -617,6 +631,34 @@
         KUBECONFIG: /etc/kubernetes/admin.conf
       run_once: true
       delegate_to: "{{ api_master }}"
+
+    - name: Wait for kube-state-metrics to be ready
+      shell: kubectl rollout status deployment/kube-state-metrics -n kube-system --timeout=120s --kubeconfig=/etc/kubernetes/admin.conf
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      run_once: true
+      delegate_to: "{{ api_master }}"
+
+    - name: Verify all components are running
+      shell: |
+        echo "=== Node Exporter ==="
+        kubectl get daemonset node-exporter -n kube-system --kubeconfig=/etc/kubernetes/admin.conf
+        echo ""
+        echo "=== Kube State Metrics ==="
+        kubectl get deployment kube-state-metrics -n kube-system --kubeconfig=/etc/kubernetes/admin.conf
+        echo ""
+        echo "=== All Pods ==="
+        kubectl get pods -n kube-system -l 'app in (node-exporter,kube-state-metrics)' --kubeconfig=/etc/kubernetes/admin.conf
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: component_status
+      run_once: true
+      delegate_to: "{{ api_master }}"
+
+    - name: Display component status
+      debug:
+        var: component_status.stdout_lines
+      run_once: true
 
     - name: Save token to local file
       copy:
@@ -643,6 +685,12 @@
         name: prometheus
         state: restarted
 
+    - name: Wait for Prometheus to restart
+      wait_for:
+        port: 9090
+        delay: 5
+        timeout: 60
+
     - name: Display final access information
       debug:
         msg: |
@@ -654,10 +702,21 @@
           Provider Network: http://{{ hostvars[inventory_hostname].ansible_host }}:9090
           
           Configuration:
-          - Scraping metrics from Kubernetes cluster
+          - Scraping metrics from Kubernetes cluster at {{ hostvars[groups['masters'][0]].ansible_host }}:6443
           - Monitoring all nodes via node-exporter
           - Collecting pod metrics via kube-state-metrics
           - Alert rules configured
+          
+          Verify targets at:
+          http://{{ hostvars[inventory_hostname].ansible_host }}:9090/targets
+          
+          Expected targets:
+          - prometheus (1/1)
+          - kubernetes-apiservers (1/1)
+          - kubernetes-nodes (2/2)
+          - kubernetes-cadvisor (2/2)
+          - node-exporter (2/2)
+          - kube-state-metrics (1/1)
           
           Next steps:
           1. Install Alertmanager (run install-alertmanager.yaml)
