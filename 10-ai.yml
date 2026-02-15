@@ -80,12 +80,16 @@
                   end_time = datetime.now()
                   start_time = end_time - timedelta(seconds=seconds)
                   
+                  # Calculate appropriate step size based on time range
+                  # Limit to ~100-200 data points for Prophet
+                  step_size = max(1, seconds // 100)
+                  
                   query = metric
                   params = {
                       'query': query,
-                      'start': start_time.isoformat() + 'Z',
-                      'end': end_time.isoformat() + 'Z',
-                      'step': '1s'
+                      'start': start_time.timestamp(),
+                      'end': end_time.timestamp(),
+                      'step': f'{step_size}s'
                   }
                   
                   response = requests.get(f"{PROMETHEUS_URL}/api/v1/query_range", params=params)
@@ -121,8 +125,11 @@
                   )
                   model.fit(df)
                   
-                  # Make future dataframe
-                  future = model.make_future_dataframe(periods=forecast_seconds, freq='s')
+                  # Make future dataframe with same frequency as historical data
+                  # Calculate number of future periods based on average time delta
+                  avg_delta = (df['ds'].max() - df['ds'].min()) / len(df)
+                  future_periods = int(forecast_seconds / avg_delta.total_seconds())
+                  future = model.make_future_dataframe(periods=future_periods, freq=avg_delta)
                   forecast_data = model.predict(future)
                   
                   # Create plotly graph
