@@ -1,0 +1,649 @@
+---
+- name: Install Prophet AI Forecasting on Monitoring Server
+  hosts: monitors
+  become: yes
+  tasks:
+    - name: Install Python and dependencies
+      apt:
+        name:
+          - python3
+          - python3-pip
+          - python3-venv
+        state: present
+        update_cache: yes
+
+    - name: Create prophet application directory
+      file:
+        path: /opt/prophet
+        state: directory
+        mode: '0755'
+
+    - name: Create Python virtual environment
+      command: python3 -m venv /opt/prophet/venv
+      args:
+        creates: /opt/prophet/venv
+
+    - name: Install Prophet and dependencies in venv
+      pip:
+        name:
+          - prophet
+          - flask
+          - requests
+          - pandas
+          - plotly
+        virtualenv: /opt/prophet/venv
+
+    - name: Create Prophet Flask application
+      copy:
+        content: |
+          from flask import Flask, render_template, request, jsonify
+          import requests
+          from prophet import Prophet
+          import pandas as pd
+          import plotly.graph_objs as go
+          import plotly.io as pio
+          from datetime import datetime, timedelta
+          
+          app = Flask(__name__)
+          
+          PROMETHEUS_URL = "http://localhost:9090"
+          
+          @app.route('/')
+          def index():
+              return render_template('index.html')
+          
+          @app.route('/api/metrics')
+          def get_metrics():
+              """Get list of available metrics from Prometheus"""
+              try:
+                  response = requests.get(f"{PROMETHEUS_URL}/api/v1/label/__name__/values")
+                  if response.status_code == 200:
+                      metrics = response.json()['data']
+                      # Filter for common interesting metrics
+                      interesting = [m for m in metrics if any(x in m for x in 
+                          ['cpu', 'memory', 'disk', 'network', 'pod', 'container', 'node'])]
+                      return jsonify(sorted(interesting[:50]))  # Limit to 50 metrics
+                  return jsonify([])
+              except Exception as e:
+                  return jsonify({"error": str(e)}), 500
+          
+          @app.route('/api/forecast', methods=['POST'])
+          def forecast():
+              """Generate forecast for a metric"""
+              try:
+                  data = request.json
+                  metric = data.get('metric')
+                  hours = int(data.get('hours', 24))
+                  forecast_hours = int(data.get('forecast_hours', 6))
+                  
+                  # Query Prometheus for historical data
+                  end_time = datetime.now()
+                  start_time = end_time - timedelta(hours=hours)
+                  
+                  query = metric
+                  params = {
+                      'query': query,
+                      'start': start_time.isoformat() + 'Z',
+                      'end': end_time.isoformat() + 'Z',
+                      'step': '1m'
+                  }
+                  
+                  response = requests.get(f"{PROMETHEUS_URL}/api/v1/query_range", params=params)
+                  
+                  if response.status_code != 200:
+                      return jsonify({"error": "Failed to fetch data from Prometheus"}), 400
+                  
+                  result = response.json()
+                  
+                  if not result['data']['result']:
+                      return jsonify({"error": "No data found for this metric"}), 404
+                  
+                  # Extract time series data (use first result)
+                  values = result['data']['result'][0]['values']
+                  
+                  # Prepare data for Prophet
+                  df = pd.DataFrame(values, columns=['ds', 'y'])
+                  df['ds'] = pd.to_datetime(df['ds'], unit='s')
+                  df['y'] = pd.to_numeric(df['y'])
+                  
+                  # Remove any NaN or infinite values
+                  df = df.replace([float('inf'), float('-inf')], float('nan')).dropna()
+                  
+                  if len(df) < 2:
+                      return jsonify({"error": "Not enough data points for forecasting"}), 400
+                  
+                  # Create and fit Prophet model
+                  model = Prophet(
+                      daily_seasonality=True,
+                      weekly_seasonality=False,
+                      yearly_seasonality=False,
+                      changepoint_prior_scale=0.05
+                  )
+                  model.fit(df)
+                  
+                  # Make future dataframe
+                  future = model.make_future_dataframe(periods=forecast_hours*60, freq='T')
+                  forecast_data = model.predict(future)
+                  
+                  # Create plotly graph
+                  fig = go.Figure()
+                  
+                  # Historical data
+                  fig.add_trace(go.Scatter(
+                      x=df['ds'],
+                      y=df['y'],
+                      mode='lines',
+                      name='Historical',
+                      line=dict(color='blue', width=2)
+                  ))
+                  
+                  # Forecast
+                  forecast_slice = forecast_data[forecast_data['ds'] > df['ds'].max()]
+                  fig.add_trace(go.Scatter(
+                      x=forecast_slice['ds'],
+                      y=forecast_slice['yhat'],
+                      mode='lines',
+                      name='Forecast',
+                      line=dict(color='red', width=2, dash='dash')
+                  ))
+                  
+                  # Confidence interval
+                  fig.add_trace(go.Scatter(
+                      x=forecast_slice['ds'],
+                      y=forecast_slice['yhat_upper'],
+                      mode='lines',
+                      name='Upper Bound',
+                      line=dict(width=0),
+                      showlegend=False
+                  ))
+                  
+                  fig.add_trace(go.Scatter(
+                      x=forecast_slice['ds'],
+                      y=forecast_slice['yhat_lower'],
+                      mode='lines',
+                      name='Confidence Interval',
+                      fill='tonexty',
+                      fillcolor='rgba(255,0,0,0.2)',
+                      line=dict(width=0)
+                  ))
+                  
+                  fig.update_layout(
+                      title=f'Forecast for {metric}',
+                      xaxis_title='Time',
+                      yaxis_title='Value',
+                      hovermode='x unified',
+                      template='plotly_white'
+                  )
+                  
+                  return jsonify({
+                      'plot': pio.to_json(fig),
+                      'stats': {
+                          'data_points': len(df),
+                          'forecast_points': len(forecast_slice),
+                          'last_value': float(df['y'].iloc[-1]),
+                          'predicted_value': float(forecast_slice['yhat'].iloc[-1]),
+                          'trend': 'increasing' if forecast_slice['yhat'].iloc[-1] > df['y'].iloc[-1] else 'decreasing'
+                      }
+                  })
+                  
+              except Exception as e:
+                  return jsonify({"error": str(e)}), 500
+          
+          if __name__ == '__main__':
+              app.run(host='0.0.0.0', port=5000, debug=False)
+        dest: /opt/prophet/app.py
+        mode: '0644'
+
+    - name: Create templates directory
+      file:
+        path: /opt/prophet/templates
+        state: directory
+        mode: '0755'
+
+    - name: Create Prophet web UI
+      copy:
+        content: |
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Prophet AI Forecasting - Prometheus Metrics</title>
+              <style>
+                  * {
+                      margin: 0;
+                      padding: 0;
+                      box-sizing: border-box;
+                  }
+                  
+                  body {
+                      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      min-height: 100vh;
+                      padding: 20px;
+                  }
+                  
+                  .container {
+                      max-width: 1400px;
+                      margin: 0 auto;
+                      background: white;
+                      border-radius: 12px;
+                      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                      overflow: hidden;
+                  }
+                  
+                  .header {
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      color: white;
+                      padding: 30px;
+                      text-align: center;
+                  }
+                  
+                  .header h1 {
+                      font-size: 2.5em;
+                      margin-bottom: 10px;
+                      font-weight: 700;
+                  }
+                  
+                  .header p {
+                      font-size: 1.1em;
+                      opacity: 0.9;
+                  }
+                  
+                  .content {
+                      padding: 30px;
+                  }
+                  
+                  .controls {
+                      background: #f8f9fa;
+                      padding: 25px;
+                      border-radius: 8px;
+                      margin-bottom: 30px;
+                      border: 2px solid #e9ecef;
+                  }
+                  
+                  .form-group {
+                      margin-bottom: 20px;
+                  }
+                  
+                  .form-group label {
+                      display: block;
+                      margin-bottom: 8px;
+                      font-weight: 600;
+                      color: #495057;
+                  }
+                  
+                  .form-group select,
+                  .form-group input {
+                      width: 100%;
+                      padding: 12px;
+                      border: 2px solid #dee2e6;
+                      border-radius: 6px;
+                      font-size: 16px;
+                      transition: border-color 0.3s;
+                  }
+                  
+                  .form-group select:focus,
+                  .form-group input:focus {
+                      outline: none;
+                      border-color: #667eea;
+                  }
+                  
+                  .form-row {
+                      display: grid;
+                      grid-template-columns: 1fr 1fr;
+                      gap: 20px;
+                  }
+                  
+                  .btn {
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      color: white;
+                      padding: 14px 30px;
+                      border: none;
+                      border-radius: 6px;
+                      font-size: 16px;
+                      font-weight: 600;
+                      cursor: pointer;
+                      transition: transform 0.2s, box-shadow 0.2s;
+                      width: 100%;
+                  }
+                  
+                  .btn:hover {
+                      transform: translateY(-2px);
+                      box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+                  }
+                  
+                  .btn:active {
+                      transform: translateY(0);
+                  }
+                  
+                  .btn:disabled {
+                      opacity: 0.6;
+                      cursor: not-allowed;
+                  }
+                  
+                  .loading {
+                      text-align: center;
+                      padding: 40px;
+                      display: none;
+                  }
+                  
+                  .loading.active {
+                      display: block;
+                  }
+                  
+                  .spinner {
+                      border: 4px solid #f3f3f3;
+                      border-top: 4px solid #667eea;
+                      border-radius: 50%;
+                      width: 50px;
+                      height: 50px;
+                      animation: spin 1s linear infinite;
+                      margin: 0 auto 20px;
+                  }
+                  
+                  @keyframes spin {
+                      0% { transform: rotate(0deg); }
+                      100% { transform: rotate(360deg); }
+                  }
+                  
+                  .results {
+                      display: none;
+                  }
+                  
+                  .results.active {
+                      display: block;
+                  }
+                  
+                  .stats {
+                      display: grid;
+                      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                      gap: 20px;
+                      margin-bottom: 30px;
+                  }
+                  
+                  .stat-card {
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      color: white;
+                      padding: 20px;
+                      border-radius: 8px;
+                      text-align: center;
+                  }
+                  
+                  .stat-card h3 {
+                      font-size: 0.9em;
+                      opacity: 0.9;
+                      margin-bottom: 10px;
+                      text-transform: uppercase;
+                      letter-spacing: 1px;
+                  }
+                  
+                  .stat-card p {
+                      font-size: 1.8em;
+                      font-weight: 700;
+                  }
+                  
+                  .chart-container {
+                      background: white;
+                      border-radius: 8px;
+                      padding: 20px;
+                      border: 2px solid #e9ecef;
+                  }
+                  
+                  .error {
+                      background: #f8d7da;
+                      color: #721c24;
+                      padding: 15px;
+                      border-radius: 6px;
+                      margin-bottom: 20px;
+                      border: 2px solid #f5c6cb;
+                      display: none;
+                  }
+                  
+                  .error.active {
+                      display: block;
+                  }
+                  
+                  .info-banner {
+                      background: #d1ecf1;
+                      color: #0c5460;
+                      padding: 15px;
+                      border-radius: 6px;
+                      margin-bottom: 20px;
+                      border: 2px solid #bee5eb;
+                  }
+              </style>
+              <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+          </head>
+          <body>
+              <div class="container">
+                  <div class="header">
+                      <h1>🔮 Prophet AI Forecasting</h1>
+                      <p>AI-Powered Time Series Forecasting for Prometheus Metrics</p>
+                  </div>
+                  
+                  <div class="content">
+                      <div class="info-banner">
+                          <strong>ℹ️ How it works:</strong> Select a metric from your Prometheus monitoring, choose the time window, and Prophet AI will analyze patterns to forecast future values.
+                      </div>
+                      
+                      <div class="controls">
+                          <div class="form-group">
+                              <label for="metric">Select Metric</label>
+                              <select id="metric">
+                                  <option value="">Loading metrics...</option>
+                              </select>
+                          </div>
+                          
+                          <div class="form-row">
+                              <div class="form-group">
+                                  <label for="hours">Historical Data (hours)</label>
+                                  <input type="number" id="hours" value="24" min="1" max="168">
+                              </div>
+                              
+                              <div class="form-group">
+                                  <label for="forecast">Forecast Ahead (hours)</label>
+                                  <input type="number" id="forecast" value="6" min="1" max="48">
+                              </div>
+                          </div>
+                          
+                          <button class="btn" onclick="generateForecast()">Generate Forecast</button>
+                      </div>
+                      
+                      <div class="error" id="error"></div>
+                      
+                      <div class="loading" id="loading">
+                          <div class="spinner"></div>
+                          <p>Prophet AI is analyzing the data and generating forecast...</p>
+                      </div>
+                      
+                      <div class="results" id="results">
+                          <div class="stats" id="stats"></div>
+                          <div class="chart-container">
+                              <div id="chart"></div>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+              
+              <script>
+                  // Load available metrics on page load
+                  async function loadMetrics() {
+                      try {
+                          const response = await fetch('/api/metrics');
+                          const metrics = await response.json();
+                          
+                          const select = document.getElementById('metric');
+                          select.innerHTML = '<option value="">-- Select a metric --</option>';
+                          
+                          metrics.forEach(metric => {
+                              const option = document.createElement('option');
+                              option.value = metric;
+                              option.textContent = metric;
+                              select.appendChild(option);
+                          });
+                      } catch (error) {
+                          showError('Failed to load metrics: ' + error.message);
+                      }
+                  }
+                  
+                  function showError(message) {
+                      const errorDiv = document.getElementById('error');
+                      errorDiv.textContent = message;
+                      errorDiv.classList.add('active');
+                      setTimeout(() => errorDiv.classList.remove('active'), 5000);
+                  }
+                  
+                  async function generateForecast() {
+                      const metric = document.getElementById('metric').value;
+                      const hours = document.getElementById('hours').value;
+                      const forecast = document.getElementById('forecast').value;
+                      
+                      if (!metric) {
+                          showError('Please select a metric');
+                          return;
+                      }
+                      
+                      // Show loading
+                      document.getElementById('loading').classList.add('active');
+                      document.getElementById('results').classList.remove('active');
+                      document.getElementById('error').classList.remove('active');
+                      
+                      try {
+                          const response = await fetch('/api/forecast', {
+                              method: 'POST',
+                              headers: {
+                                  'Content-Type': 'application/json',
+                              },
+                              body: JSON.stringify({
+                                  metric: metric,
+                                  hours: parseInt(hours),
+                                  forecast_hours: parseInt(forecast)
+                              })
+                          });
+                          
+                          if (!response.ok) {
+                              const error = await response.json();
+                              throw new Error(error.error || 'Failed to generate forecast');
+                          }
+                          
+                          const data = await response.json();
+                          
+                          // Hide loading
+                          document.getElementById('loading').classList.remove('active');
+                          
+                          // Show results
+                          displayResults(data);
+                          
+                      } catch (error) {
+                          document.getElementById('loading').classList.remove('active');
+                          showError(error.message);
+                      }
+                  }
+                  
+                  function displayResults(data) {
+                      // Display stats
+                      const statsHtml = `
+                          <div class="stat-card">
+                              <h3>Data Points</h3>
+                              <p>${data.stats.data_points}</p>
+                          </div>
+                          <div class="stat-card">
+                              <h3>Forecast Points</h3>
+                              <p>${data.stats.forecast_points}</p>
+                          </div>
+                          <div class="stat-card">
+                              <h3>Current Value</h3>
+                              <p>${data.stats.last_value.toFixed(2)}</p>
+                          </div>
+                          <div class="stat-card">
+                              <h3>Predicted Value</h3>
+                              <p>${data.stats.predicted_value.toFixed(2)}</p>
+                          </div>
+                          <div class="stat-card">
+                              <h3>Trend</h3>
+                              <p>${data.stats.trend === 'increasing' ? '📈' : '📉'} ${data.stats.trend}</p>
+                          </div>
+                      `;
+                      document.getElementById('stats').innerHTML = statsHtml;
+                      
+                      // Display chart
+                      const plotData = JSON.parse(data.plot);
+                      Plotly.newPlot('chart', plotData.data, plotData.layout, {responsive: true});
+                      
+                      // Show results
+                      document.getElementById('results').classList.add('active');
+                  }
+                  
+                  // Load metrics when page loads
+                  loadMetrics();
+              </script>
+          </body>
+          </html>
+        dest: /opt/prophet/templates/index.html
+        mode: '0644'
+
+    - name: Create Prophet systemd service
+      copy:
+        content: |
+          [Unit]
+          Description=Prophet AI Forecasting Service
+          After=network.target prometheus.service
+          Requires=prometheus.service
+
+          [Service]
+          Type=simple
+          User=root
+          WorkingDirectory=/opt/prophet
+          Environment="PATH=/opt/prophet/venv/bin"
+          ExecStart=/opt/prophet/venv/bin/python /opt/prophet/app.py
+          Restart=always
+          RestartSec=10
+
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/prophet.service
+        mode: '0644'
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable and start Prophet service
+      systemd:
+        name: prophet
+        state: started
+        enabled: yes
+
+    - name: Wait for Prophet to be ready
+      wait_for:
+        port: 5000
+        delay: 5
+        timeout: 60
+
+    - name: Display Prophet access information
+      debug:
+        msg: |
+          ================================================
+          PROPHET AI FORECASTING INSTALLED
+          ================================================
+          
+          Access Prophet Web UI:
+          Provider Network: http://{{ hostvars[inventory_hostname].ansible_host }}:5000
+          
+          Features:
+          ✓ AI-powered time series forecasting
+          ✓ Real-time Prometheus metric analysis
+          ✓ Interactive visualization
+          ✓ Confidence intervals
+          ✓ Trend detection
+          
+          How to use:
+          1. Open the web interface
+          2. Select a metric from the dropdown
+          3. Choose historical data window (default: 24 hours)
+          4. Choose forecast horizon (default: 6 hours)
+          5. Click "Generate Forecast"
+          
+          Prophet will analyze patterns and predict future values!
+          ================================================
