@@ -42,7 +42,37 @@
       dpkg_selections:
         name: kubectl
         selection: hold
-    - name: Enable kubelet
+
+    - name: Create kubelet systemd drop-in directory
+      file:
+        path: /etc/systemd/system/kubelet.service.d
+        state: directory
+        mode: '0755'
+
+    - name: Ensure kubelet starts after containerd and recovers
+      copy:
+        content: |
+          [Unit]
+          After=containerd.service network-online.target
+          Wants=containerd.service network-online.target
+
+          [Service]
+          Restart=always
+          RestartSec=5
+        dest: /etc/systemd/system/kubelet.service.d/10-ansible.conf
+        mode: '0644'
+
+    - name: Reload systemd for kubelet drop-in
+      systemd:
+        daemon_reload: yes
+
+    - name: Wait for containerd to be ready before starting kubelet
+      wait_for:
+        path: /run/containerd/containerd.sock
+        timeout: 60
+      when: ansible_service_mgr == "systemd"
+
+    - name: Enable and start kubelet
       systemd:
         name: kubelet
         enabled: yes

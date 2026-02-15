@@ -321,12 +321,37 @@
 - name: Setup Kubernetes for External Prometheus
   hosts: masters
   become: yes
+  vars:
+    api_master: "{{ groups['masters'][0] }}"
   tasks:
+    - name: Wait for API server to be ready
+      wait_for:
+        port: 6443
+        host: "127.0.0.1"
+        delay: 5
+        timeout: 120
+        state: started
+      run_once: true
+      delegate_to: "{{ api_master }}"
+
+    - name: Ensure kubectl can reach API server
+      shell: kubectl get nodes --request-timeout=10s --kubeconfig=/etc/kubernetes/admin.conf
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: api_ready
+      until: api_ready.rc == 0
+      retries: 24
+      delay: 5
+      run_once: true
+      delegate_to: "{{ api_master }}"
+
     - name: Create kube-system namespace if not exists
       shell: kubectl create namespace kube-system --kubeconfig=/etc/kubernetes/admin.conf
       environment:
         KUBECONFIG: /etc/kubernetes/admin.conf
       ignore_errors: yes
+      run_once: true
+      delegate_to: "{{ api_master }}"
 
     - name: Create ServiceAccount for Prometheus
       shell: |
@@ -375,6 +400,8 @@
         EOF
       environment:
         KUBECONFIG: /etc/kubernetes/admin.conf
+      run_once: true
+      delegate_to: "{{ api_master }}"
 
     - name: Create token secret for Prometheus
       shell: |
@@ -390,6 +417,8 @@
         EOF
       environment:
         KUBECONFIG: /etc/kubernetes/admin.conf
+      run_once: true
+      delegate_to: "{{ api_master }}"
 
     - name: Wait for token to be generated
       shell: kubectl get secret prometheus-token -n kube-system -o jsonpath='{.data.token}' --kubeconfig=/etc/kubernetes/admin.conf
@@ -399,12 +428,16 @@
       until: token_check.stdout != ""
       retries: 10
       delay: 2
+      run_once: true
+      delegate_to: "{{ api_master }}"
 
     - name: Get Prometheus token
       shell: kubectl get secret prometheus-token -n kube-system -o jsonpath='{.data.token}' --kubeconfig=/etc/kubernetes/admin.conf | base64 -d
       environment:
         KUBECONFIG: /etc/kubernetes/admin.conf
       register: prometheus_token
+      run_once: true
+      delegate_to: "{{ api_master }}"
 
     - name: Deploy node-exporter DaemonSet
       shell: |
@@ -471,6 +504,8 @@
         EOF
       environment:
         KUBECONFIG: /etc/kubernetes/admin.conf
+      run_once: true
+      delegate_to: "{{ api_master }}"
 
     - name: Deploy kube-state-metrics
       shell: |
@@ -580,12 +615,15 @@
         EOF
       environment:
         KUBECONFIG: /etc/kubernetes/admin.conf
+      run_once: true
+      delegate_to: "{{ api_master }}"
 
     - name: Save token to local file
-      local_action:
-        module: copy
-        content: "{{ prometheus_token.stdout }}"
+      copy:
+        content: "{{ hostvars[api_master].prometheus_token.stdout }}"
         dest: /tmp/k8s-prometheus-token
+      run_once: true
+      delegate_to: localhost
       become: no
 
 - name: Transfer Kubernetes token to Prometheus server
