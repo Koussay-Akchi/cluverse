@@ -521,6 +521,13 @@
       run_once: true
       delegate_to: "{{ api_master }}"
 
+    - name: Delete existing kube-state-metrics service if it exists
+      shell: kubectl delete service kube-state-metrics -n kube-system --ignore-not-found=true --kubeconfig=/etc/kubernetes/admin.conf
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      run_once: true
+      delegate_to: "{{ api_master }}"
+
     - name: Deploy kube-state-metrics
       shell: |
         cat <<EOF | kubectl apply -f -
@@ -633,7 +640,7 @@
           labels:
             app: kube-state-metrics
         spec:
-          clusterIP: None
+          type: ClusterIP
           selector:
             app: kube-state-metrics
           ports:
