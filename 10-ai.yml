@@ -73,19 +73,19 @@
               try:
                   data = request.json
                   metric = data.get('metric')
-                  hours = int(data.get('hours', 24))
-                  forecast_hours = int(data.get('forecast_hours', 6))
+                  seconds = int(data.get('seconds', 300))
+                  forecast_seconds = int(data.get('forecast_seconds', 60))
                   
                   # Query Prometheus for historical data
                   end_time = datetime.now()
-                  start_time = end_time - timedelta(hours=hours)
+                  start_time = end_time - timedelta(seconds=seconds)
                   
                   query = metric
                   params = {
                       'query': query,
                       'start': start_time.isoformat() + 'Z',
                       'end': end_time.isoformat() + 'Z',
-                      'step': '1m'
+                      'step': '1s'
                   }
                   
                   response = requests.get(f"{PROMETHEUS_URL}/api/v1/query_range", params=params)
@@ -122,7 +122,7 @@
                   model.fit(df)
                   
                   # Make future dataframe
-                  future = model.make_future_dataframe(periods=forecast_hours*60, freq='T')
+                  future = model.make_future_dataframe(periods=forecast_seconds, freq='s')
                   forecast_data = model.predict(future)
                   
                   # Create plotly graph
@@ -424,7 +424,7 @@
                   
                   <div class="content">
                       <div class="info-banner">
-                          <strong>ℹ️ How it works:</strong> Select a metric from your Prometheus monitoring, choose the time window, and Prophet AI will analyze patterns to forecast future values.
+                          <strong>ℹ️ How it works:</strong> Select a metric from your Prometheus monitoring, choose the time window in seconds, and Prophet AI will analyze patterns to forecast future values in seconds.
                       </div>
                       
                       <div class="controls">
@@ -437,13 +437,13 @@
                           
                           <div class="form-row">
                               <div class="form-group">
-                                  <label for="hours">Historical Data (hours)</label>
-                                  <input type="number" id="hours" value="24" min="1" max="168">
+                                  <label for="seconds">Historical Data (seconds)</label>
+                                  <input type="number" id="seconds" value="300" min="60" max="3600">
                               </div>
                               
                               <div class="form-group">
-                                  <label for="forecast">Forecast Ahead (hours)</label>
-                                  <input type="number" id="forecast" value="6" min="1" max="48">
+                                  <label for="forecast">Forecast Ahead (seconds)</label>
+                                  <input type="number" id="forecast" value="60" min="10" max="600">
                               </div>
                           </div>
                           
@@ -496,7 +496,7 @@
                   
                   async function generateForecast() {
                       const metric = document.getElementById('metric').value;
-                      const hours = document.getElementById('hours').value;
+                      const seconds = document.getElementById('seconds').value;
                       const forecast = document.getElementById('forecast').value;
                       
                       if (!metric) {
@@ -517,8 +517,8 @@
                               },
                               body: JSON.stringify({
                                   metric: metric,
-                                  hours: parseInt(hours),
-                                  forecast_hours: parseInt(forecast)
+                                  seconds: parseInt(seconds),
+                                  forecast_seconds: parseInt(forecast)
                               })
                           });
                           
