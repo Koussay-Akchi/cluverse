@@ -1,6 +1,6 @@
 ---
 - name: Install containerd
-  hosts: k8s_cluster
+  hosts: all
   become: yes
   tasks:
     - name: Create keyrings directory

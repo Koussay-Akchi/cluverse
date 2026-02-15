@@ -110,7 +110,7 @@ worker1-ip
 worker2-ip
 worker3-ip
 
-[k8s_cluster:children]
+[all:children]
 masters
 workers
 ```

@@ -1,6 +1,6 @@
 ---
 - name: Common setup
-  hosts: k8s_cluster
+  hosts: all
   become: yes
   tasks:
     - name: Update apt cache
