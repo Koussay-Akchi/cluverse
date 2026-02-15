@@ -1,433 +1,501 @@
 ---
-- name: Install Grafana
-  hosts: masters
+- name: Install Grafana on Monitoring Server
+  hosts: monitors
   become: yes
   tasks:
-    - name: Create grafana ConfigMap with datasources
-      shell: |
-        cat <<EOF | kubectl apply -f -
-        apiVersion: v1
-        kind: ConfigMap
-        metadata:
-          name: grafana-datasources
-          namespace: prometheus
-        data:
-          prometheus.yaml: |
-            apiVersion: 1
-            datasources:
-            - name: Prometheus
-              type: prometheus
-              access: proxy
-              url: http://prometheus:9090
-              isDefault: true
-              editable: true
-        EOF
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      register: grafana_datasources
-      changed_when: "'created' in grafana_datasources.stdout or 'configured' in grafana_datasources.stdout"
+    - name: Install prerequisite packages
+      apt:
+        name:
+          - apt-transport-https
+          - software-properties-common
+          - wget
+        state: present
+        update_cache: yes
 
-    - name: Create grafana dashboards ConfigMap
-      shell: |
-        cat <<EOF | kubectl apply -f -
-        apiVersion: v1
-        kind: ConfigMap
-        metadata:
-          name: grafana-dashboards
-          namespace: prometheus
-        data:
-          dashboard-provider.yaml: |
-            apiVersion: 1
-            providers:
-            - name: 'default'
-              orgId: 1
-              folder: ''
-              type: file
-              disableDeletion: false
-              updateIntervalSeconds: 10
-              allowUiUpdates: true
-              options:
-                path: /var/lib/grafana/dashboards
-          kubernetes-cluster.json: |
-            {
-              "annotations": {
-                "list": [
-                  {
-                    "builtIn": 1,
-                    "datasource": "-- Grafana --",
-                    "enable": true,
-                    "hide": true,
-                    "iconColor": "rgba(0, 211, 255, 1)",
-                    "name": "Annotations & Alerts",
-                    "type": "dashboard"
-                  }
-                ]
-              },
-              "editable": true,
-              "gnetId": null,
-              "graphTooltip": 0,
-              "id": 1,
-              "links": [],
-              "panels": [
+    - name: Add Grafana GPG key
+      apt_key:
+        url: https://apt.grafana.com/gpg.key
+        state: present
+
+    - name: Add Grafana repository
+      apt_repository:
+        repo: deb https://apt.grafana.com stable main
+        state: present
+        filename: grafana
+
+    - name: Install Grafana
+      apt:
+        name: grafana
+        state: present
+        update_cache: yes
+
+    - name: Create Grafana datasource provisioning directory
+      file:
+        path: /etc/grafana/provisioning/datasources
+        state: directory
+        owner: grafana
+        group: grafana
+        mode: '0755'
+
+    - name: Create Grafana dashboard provisioning directory
+      file:
+        path: /etc/grafana/provisioning/dashboards
+        state: directory
+        owner: grafana
+        group: grafana
+        mode: '0755'
+
+    - name: Create Grafana dashboards storage directory
+      file:
+        path: /var/lib/grafana/dashboards
+        state: directory
+        owner: grafana
+        group: grafana
+        mode: '0755'
+
+    - name: Configure Prometheus datasource
+      copy:
+        content: |
+          apiVersion: 1
+          datasources:
+          - name: Prometheus
+            type: prometheus
+            access: proxy
+            url: http://localhost:9090
+            isDefault: true
+            editable: true
+            jsonData:
+              timeInterval: 15s
+        dest: /etc/grafana/provisioning/datasources/prometheus.yaml
+        owner: grafana
+        group: grafana
+        mode: '0644'
+
+    - name: Configure dashboard provider
+      copy:
+        content: |
+          apiVersion: 1
+          providers:
+          - name: 'default'
+            orgId: 1
+            folder: ''
+            type: file
+            disableDeletion: false
+            updateIntervalSeconds: 10
+            allowUiUpdates: true
+            options:
+              path: /var/lib/grafana/dashboards
+        dest: /etc/grafana/provisioning/dashboards/dashboard-provider.yaml
+        owner: grafana
+        group: grafana
+        mode: '0644'
+
+    - name: Create Kubernetes cluster dashboard
+      copy:
+        content: |
+          {
+            "annotations": {
+              "list": [
                 {
-                  "datasource": "Prometheus",
-                  "fieldConfig": {
-                    "defaults": {},
-                    "overrides": []
-                  },
-                  "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
-                  "id": 1,
-                  "options": {
-                    "showLegend": true,
-                    "legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}
-                  },
-                  "targets": [
-                    {
-                      "expr": "up{job=\"kubernetes-nodes\"}",
-                      "interval": "",
-                      "legendFormat": "{{node}}",
-                      "refId": "A"
-                    }
-                  ],
-                  "title": "Node Status",
-                  "type": "timeseries"
-                },
-                {
-                  "datasource": "Prometheus",
-                  "fieldConfig": {
-                    "defaults": {},
-                    "overrides": []
-                  },
-                  "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
-                  "id": 2,
-                  "options": {
-                    "showLegend": true,
-                    "legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}
-                  },
-                  "targets": [
-                    {
-                      "expr": "rate(node_cpu_seconds_total{mode!=\"idle\"}[5m])*100",
-                      "interval": "",
-                      "legendFormat": "{{node}}-{{mode}}",
-                      "refId": "A"
-                    }
-                  ],
-                  "title": "CPU Usage %",
-                  "type": "timeseries"
-                },
-                {
-                  "datasource": "Prometheus",
-                  "fieldConfig": {
-                    "defaults": {},
-                    "overrides": []
-                  },
-                  "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
-                  "id": 3,
-                  "options": {
-                    "showLegend": true,
-                    "legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}
-                  },
-                  "targets": [
-                    {
-                      "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
-                      "interval": "",
-                      "legendFormat": "{{node}}",
-                      "refId": "A"
-                    }
-                  ],
-                  "title": "Memory Usage %",
-                  "type": "timeseries"
-                },
-                {
-                  "datasource": "Prometheus",
-                  "fieldConfig": {
-                    "defaults": {},
-                    "overrides": []
-                  },
-                  "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
-                  "id": 4,
-                  "options": {
-                    "showLegend": true,
-                    "legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}
-                  },
-                  "targets": [
-                    {
-                      "expr": "rate(node_network_receive_bytes_total[5m])",
-                      "interval": "",
-                      "legendFormat": "RX {{device}}",
-                      "refId": "A"
-                    },
-                    {
-                      "expr": "rate(node_network_transmit_bytes_total[5m])",
-                      "interval": "",
-                      "legendFormat": "TX {{device}}",
-                      "refId": "B"
-                    }
-                  ],
-                  "title": "Network I/O",
-                  "type": "timeseries"
-                },
-                {
-                  "datasource": "Prometheus",
-                  "fieldConfig": {
-                    "defaults": {},
-                    "overrides": []
-                  },
-                  "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
-                  "id": 5,
-                  "options": {
-                    "showLegend": true,
-                    "legend": {"calcs": [], "displayMode": "table", "placement": "right"}
-                  },
-                  "targets": [
-                    {
-                      "expr": "count by (phase) (kube_pod_status_phase)",
-                      "interval": "",
-                      "legendFormat": "{{phase}}",
-                      "refId": "A"
-                    }
-                  ],
-                  "title": "Pod Status Distribution",
-                  "type": "timeseries"
-                },
-                {
-                  "datasource": "Prometheus",
-                  "fieldConfig": {
-                    "defaults": {},
-                    "overrides": []
-                  },
-                  "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
-                  "id": 6,
-                  "targets": [
-                    {
-                      "expr": "prometheus_tsdb_symbol_table_size_bytes",
-                      "interval": "",
-                      "legendFormat": "{{instance}}",
-                      "refId": "A"
-                    }
-                  ],
-                  "title": "Prometheus Storage Size",
-                  "type": "stat"
-                },
-                {
-                  "datasource": "Prometheus",
-                  "fieldConfig": {
-                    "defaults": {},
-                    "overrides": []
-                  },
-                  "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
-                  "id": 7,
-                  "options": {
-                    "showLegend": true,
-                    "legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}
-                  },
-                  "targets": [
-                    {
-                      "expr": "rate(http_requests_total[5m])",
-                      "interval": "",
-                      "legendFormat": "{{handler}}",
-                      "refId": "A"
-                    }
-                  ],
-                  "title": "HTTP Requests/sec",
-                  "type": "timeseries"
+                  "builtIn": 1,
+                  "datasource": "-- Grafana --",
+                  "enable": true,
+                  "hide": true,
+                  "iconColor": "rgba(0, 211, 255, 1)",
+                  "name": "Annotations & Alerts",
+                  "type": "dashboard"
                 }
-              ],
-              "schemaVersion": 27,
-              "style": "dark",
-              "tags": ["kubernetes", "monitoring"],
-              "templating": {"list": []},
-              "time": {"from": "now-24h", "to": "now"},
-              "timepicker": {},
-              "timezone": "",
-              "title": "Kubernetes Cluster Overview",
-              "uid": "kubernetes-cluster",
-              "version": 1
-            }
-        EOF
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      register: grafana_dashboards
-      changed_when: "'created' in grafana_dashboards.stdout or 'configured' in grafana_dashboards.stdout"
+              ]
+            },
+            "editable": true,
+            "gnetId": null,
+            "graphTooltip": 0,
+            "id": null,
+            "links": [],
+            "panels": [
+              {
+                "datasource": "Prometheus",
+                "fieldConfig": {
+                  "defaults": {
+                    "color": {"mode": "palette-classic"},
+                    "custom": {
+                      "axisLabel": "",
+                      "axisPlacement": "auto",
+                      "barAlignment": 0,
+                      "drawStyle": "line",
+                      "fillOpacity": 10,
+                      "gradientMode": "none",
+                      "hideFrom": {"tooltip": false, "viz": false, "legend": false},
+                      "lineInterpolation": "linear",
+                      "lineWidth": 1,
+                      "pointSize": 5,
+                      "scaleDistribution": {"type": "linear"},
+                      "showPoints": "never",
+                      "spanNulls": true
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                      "mode": "absolute",
+                      "steps": [{"color": "green", "value": null}]
+                    },
+                    "unit": "short"
+                  },
+                  "overrides": []
+                },
+                "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+                "id": 1,
+                "options": {
+                  "legend": {"calcs": [], "displayMode": "list", "placement": "bottom"},
+                  "tooltip": {"mode": "single"}
+                },
+                "targets": [
+                  {
+                    "expr": "up{job=\"kubernetes-nodes\"}",
+                    "interval": "",
+                    "legendFormat": "{{node}}",
+                    "refId": "A"
+                  }
+                ],
+                "title": "Node Status",
+                "type": "timeseries"
+              },
+              {
+                "datasource": "Prometheus",
+                "fieldConfig": {
+                  "defaults": {
+                    "color": {"mode": "palette-classic"},
+                    "custom": {
+                      "axisLabel": "",
+                      "axisPlacement": "auto",
+                      "barAlignment": 0,
+                      "drawStyle": "line",
+                      "fillOpacity": 10,
+                      "gradientMode": "none",
+                      "hideFrom": {"tooltip": false, "viz": false, "legend": false},
+                      "lineInterpolation": "linear",
+                      "lineWidth": 1,
+                      "pointSize": 5,
+                      "scaleDistribution": {"type": "linear"},
+                      "showPoints": "never",
+                      "spanNulls": true
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                      "mode": "absolute",
+                      "steps": [{"color": "green", "value": null}, {"color": "red", "value": 80}]
+                    },
+                    "unit": "percent"
+                  },
+                  "overrides": []
+                },
+                "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+                "id": 2,
+                "options": {
+                  "legend": {"calcs": [], "displayMode": "list", "placement": "bottom"},
+                  "tooltip": {"mode": "single"}
+                },
+                "targets": [
+                  {
+                    "expr": "(1 - avg(irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) by (instance)) * 100",
+                    "interval": "",
+                    "legendFormat": "{{instance}}",
+                    "refId": "A"
+                  }
+                ],
+                "title": "CPU Usage %",
+                "type": "timeseries"
+              },
+              {
+                "datasource": "Prometheus",
+                "fieldConfig": {
+                  "defaults": {
+                    "color": {"mode": "palette-classic"},
+                    "custom": {
+                      "axisLabel": "",
+                      "axisPlacement": "auto",
+                      "barAlignment": 0,
+                      "drawStyle": "line",
+                      "fillOpacity": 10,
+                      "gradientMode": "none",
+                      "hideFrom": {"tooltip": false, "viz": false, "legend": false},
+                      "lineInterpolation": "linear",
+                      "lineWidth": 1,
+                      "pointSize": 5,
+                      "scaleDistribution": {"type": "linear"},
+                      "showPoints": "never",
+                      "spanNulls": true
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                      "mode": "absolute",
+                      "steps": [{"color": "green", "value": null}, {"color": "red", "value": 85}]
+                    },
+                    "unit": "percent"
+                  },
+                  "overrides": []
+                },
+                "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+                "id": 3,
+                "options": {
+                  "legend": {"calcs": [], "displayMode": "list", "placement": "bottom"},
+                  "tooltip": {"mode": "single"}
+                },
+                "targets": [
+                  {
+                    "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+                    "interval": "",
+                    "legendFormat": "{{instance}}",
+                    "refId": "A"
+                  }
+                ],
+                "title": "Memory Usage %",
+                "type": "timeseries"
+              },
+              {
+                "datasource": "Prometheus",
+                "fieldConfig": {
+                  "defaults": {
+                    "color": {"mode": "palette-classic"},
+                    "custom": {
+                      "axisLabel": "",
+                      "axisPlacement": "auto",
+                      "barAlignment": 0,
+                      "drawStyle": "line",
+                      "fillOpacity": 10,
+                      "gradientMode": "none",
+                      "hideFrom": {"tooltip": false, "viz": false, "legend": false},
+                      "lineInterpolation": "linear",
+                      "lineWidth": 1,
+                      "pointSize": 5,
+                      "scaleDistribution": {"type": "linear"},
+                      "showPoints": "never",
+                      "spanNulls": true
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                      "mode": "absolute",
+                      "steps": [{"color": "green", "value": null}]
+                    },
+                    "unit": "Bps"
+                  },
+                  "overrides": []
+                },
+                "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+                "id": 4,
+                "options": {
+                  "legend": {"calcs": [], "displayMode": "list", "placement": "bottom"},
+                  "tooltip": {"mode": "single"}
+                },
+                "targets": [
+                  {
+                    "expr": "rate(node_network_receive_bytes_total{device!=\"lo\"}[5m])",
+                    "interval": "",
+                    "legendFormat": "RX {{instance}} - {{device}}",
+                    "refId": "A"
+                  },
+                  {
+                    "expr": "rate(node_network_transmit_bytes_total{device!=\"lo\"}[5m])",
+                    "interval": "",
+                    "legendFormat": "TX {{instance}} - {{device}}",
+                    "refId": "B"
+                  }
+                ],
+                "title": "Network I/O",
+                "type": "timeseries"
+              },
+              {
+                "datasource": "Prometheus",
+                "fieldConfig": {
+                  "defaults": {
+                    "color": {"mode": "palette-classic"},
+                    "custom": {
+                      "axisLabel": "",
+                      "axisPlacement": "auto",
+                      "barAlignment": 0,
+                      "drawStyle": "line",
+                      "fillOpacity": 10,
+                      "gradientMode": "none",
+                      "hideFrom": {"tooltip": false, "viz": false, "legend": false},
+                      "lineInterpolation": "linear",
+                      "lineWidth": 1,
+                      "pointSize": 5,
+                      "scaleDistribution": {"type": "linear"},
+                      "showPoints": "never",
+                      "spanNulls": true
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                      "mode": "absolute",
+                      "steps": [{"color": "green", "value": null}]
+                    },
+                    "unit": "short"
+                  },
+                  "overrides": []
+                },
+                "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+                "id": 5,
+                "options": {
+                  "legend": {"calcs": [], "displayMode": "table", "placement": "right"},
+                  "tooltip": {"mode": "single"}
+                },
+                "targets": [
+                  {
+                    "expr": "sum by (phase) (kube_pod_status_phase)",
+                    "interval": "",
+                    "legendFormat": "{{phase}}",
+                    "refId": "A"
+                  }
+                ],
+                "title": "Pod Status Distribution",
+                "type": "timeseries"
+              },
+              {
+                "datasource": "Prometheus",
+                "fieldConfig": {
+                  "defaults": {
+                    "color": {"mode": "thresholds"},
+                    "mappings": [],
+                    "thresholds": {
+                      "mode": "absolute",
+                      "steps": [{"color": "green", "value": null}]
+                    },
+                    "unit": "short"
+                  },
+                  "overrides": []
+                },
+                "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+                "id": 6,
+                "options": {
+                  "colorMode": "value",
+                  "graphMode": "area",
+                  "justifyMode": "auto",
+                  "orientation": "auto",
+                  "reduceOptions": {
+                    "values": false,
+                    "calcs": ["lastNotNull"],
+                    "fields": ""
+                  },
+                  "textMode": "auto"
+                },
+                "targets": [
+                  {
+                    "expr": "sum(kube_pod_info)",
+                    "interval": "",
+                    "legendFormat": "Total Pods",
+                    "refId": "A"
+                  }
+                ],
+                "title": "Total Pods",
+                "type": "stat"
+              },
+              {
+                "datasource": "Prometheus",
+                "fieldConfig": {
+                  "defaults": {
+                    "color": {"mode": "thresholds"},
+                    "mappings": [],
+                    "thresholds": {
+                      "mode": "absolute",
+                      "steps": [{"color": "green", "value": null}]
+                    },
+                    "unit": "short"
+                  },
+                  "overrides": []
+                },
+                "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+                "id": 7,
+                "options": {
+                  "colorMode": "value",
+                  "graphMode": "area",
+                  "justifyMode": "auto",
+                  "orientation": "auto",
+                  "reduceOptions": {
+                    "values": false,
+                    "calcs": ["lastNotNull"],
+                    "fields": ""
+                  },
+                  "textMode": "auto"
+                },
+                "targets": [
+                  {
+                    "expr": "sum(kube_node_info)",
+                    "interval": "",
+                    "legendFormat": "Total Nodes",
+                    "refId": "A"
+                  }
+                ],
+                "title": "Total Nodes",
+                "type": "stat"
+              }
+            ],
+            "schemaVersion": 35,
+            "style": "dark",
+            "tags": ["kubernetes", "monitoring"],
+            "templating": {"list": []},
+            "time": {"from": "now-6h", "to": "now"},
+            "timepicker": {},
+            "timezone": "",
+            "title": "Kubernetes Cluster Overview",
+            "uid": "kubernetes-cluster",
+            "version": 1,
+            "weekStart": ""
+          }
+        dest: /var/lib/grafana/dashboards/kubernetes-cluster.json
+        owner: grafana
+        group: grafana
+        mode: '0644'
 
-    - name: Deploy Grafana
-      shell: |
-        cat <<EOF | kubectl apply -f -
-        apiVersion: apps/v1
-        kind: Deployment
-        metadata:
-          name: grafana
-          namespace: prometheus
-        spec:
-          replicas: 1
-          selector:
-            matchLabels:
-              app: grafana
-          template:
-            metadata:
-              labels:
-                app: grafana
-            spec:
-              containers:
-              - name: grafana
-                image: grafana/grafana:latest
-                env:
-                - name: GF_SECURITY_ADMIN_PASSWORD
-                  value: "admin"
-                - name: GF_SECURITY_ADMIN_USER
-                  value: "admin"
-                - name: GF_PATHS_PROVISIONING
-                  value: "/etc/grafana/provisioning"
-                - name: GF_INSTALL_PLUGINS
-                  value: "grafana-piechart-panel"
-                ports:
-                - containerPort: 3000
-                  name: web
-                volumeMounts:
-                - name: datasources
-                  mountPath: /etc/grafana/provisioning/datasources
-                - name: dashboards-provider
-                  mountPath: /etc/grafana/provisioning/dashboards
-                - name: dashboards
-                  mountPath: /var/lib/grafana/dashboards
-                - name: storage
-                  mountPath: /var/lib/grafana
-                resources:
-                  requests:
-                    cpu: 100m
-                    memory: 256Mi
-                  limits:
-                    cpu: 500m
-                    memory: 1Gi
-                livenessProbe:
-                  httpGet:
-                    path: /api/health
-                    port: 3000
-                  initialDelaySeconds: 30
-                  periodSeconds: 10
-                readinessProbe:
-                  httpGet:
-                    path: /api/health
-                    port: 3000
-                  initialDelaySeconds: 5
-                  periodSeconds: 5
-              volumes:
-              - name: datasources
-                configMap:
-                  name: grafana-datasources
-              - name: dashboards-provider
-                configMap:
-                  name: grafana-dashboards
-              - name: dashboards
-                configMap:
-                  name: grafana-dashboards
-              - name: storage
-                emptyDir: {}
-        ---
-        apiVersion: v1
-        kind: Service
-        metadata:
-          name: grafana
-          namespace: prometheus
-        spec:
-          selector:
-            app: grafana
-          ports:
-          - port: 3000
-            targetPort: 3000
-            nodePort: 30030
-            name: web
-          type: NodePort
-        EOF
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      register: grafana_deploy
-      changed_when: "'created' in grafana_deploy.stdout or 'configured' in grafana_deploy.stdout"
+    - name: Configure Grafana to listen on all interfaces
+      lineinfile:
+        path: /etc/grafana/grafana.ini
+        regexp: '^;?http_addr ='
+        line: 'http_addr = 0.0.0.0'
+        state: present
 
-    - name: Wait for Grafana deployment
-      shell: kubectl rollout status deployment/grafana -n prometheus --kubeconfig=/etc/kubernetes/admin.conf
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      retries: 20
-      delay: 10
+    - name: Configure Grafana port
+      lineinfile:
+        path: /etc/grafana/grafana.ini
+        regexp: '^;?http_port ='
+        line: 'http_port = 3000'
+        state: present
 
-    - name: Get Grafana NodePort
-      shell: kubectl get service grafana -n prometheus --kubeconfig=/etc/kubernetes/admin.conf -o jsonpath='{.spec.ports[0].nodePort}'
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      register: grafana_nodeport
-      changed_when: false
+    - name: Enable and start Grafana
+      systemd:
+        name: grafana-server
+        state: started
+        enabled: yes
 
-    - name: Get Prometheus NodePort
-      shell: kubectl get service prometheus -n prometheus --kubeconfig=/etc/kubernetes/admin.conf -o jsonpath='{.spec.ports[0].nodePort}'
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      register: prometheus_nodeport
-      changed_when: false
-      ignore_errors: yes
+    - name: Wait for Grafana to be ready
+      wait_for:
+        port: 3000
+        delay: 5
+        timeout: 60
 
-    - name: Get Alertmanager NodePort
-      shell: kubectl get service alertmanager -n prometheus --kubeconfig=/etc/kubernetes/admin.conf -o jsonpath='{.spec.ports[0].nodePort}'
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      register: alertmanager_nodeport
-      changed_when: false
-      ignore_errors: yes
-
-    - name: Display Access Information
+    - name: Display Grafana access info
       debug:
         msg: |
-          ============================================
-          Monitoring Stack Deployed Successfully!
-          ============================================
+          ================================================
+          GRAFANA STANDALONE INSTALLATION COMPLETE
+          ================================================
           
-          GRAFANA ACCESS:
-          External URL: http://MASTER_IP:{{ grafana_nodeport.stdout }}
-          Default credentials: admin / admin
+          Access Grafana Dashboard:
+          Provider Network: http://{{ hostvars[inventory_hostname].ansible_host }}:3000
           
-          PROMETHEUS ACCESS:
-          External URL: http://MASTER_IP:{{ prometheus_nodeport.stdout }}
+          Default Credentials:
+          Username: admin
+          Password: admin
+          (You will be prompted to change password on first login)
           
-          ALERTMANAGER ACCESS:
-          External URL: http://MASTER_IP:{{ alertmanager_nodeport.stdout }}
+          Configuration:
+          - Prometheus datasource configured automatically
+          - Kubernetes cluster dashboard pre-loaded
+          - Dashboard updates allowed
           
-          INTERNAL SERVICE URLS:
-          Grafana: http://grafana.prometheus.svc.cluster.local:3000
-          Prometheus: http://prometheus.prometheus.svc.cluster.local:9090
-          Alertmanager: http://alertmanager.prometheus.svc.cluster.local:9093
+          ================================================
           
-          Replace MASTER_IP with your master node's floating IP address
-          ============================================
-
-    - name: Create Grafana Alert notification channel
-      shell: |
-        cat <<EOF | kubectl apply -f -
-        apiVersion: v1
-        kind: ConfigMap
-        metadata:
-          name: grafana-alerting
-          namespace: prometheus
-        data:
-          alert-config.json: |
-            {
-              "alerting": {
-                "enabled": true,
-                "apply_default_classification": true,
-                "max_annotations_to_keep": 113,
-                "alertManagers": [
-                  {
-                    "uid": "alertmanager-uid",
-                    "name": "Alertmanager",
-                    "type": "prometheus",
-                    "url": "http://alertmanager:9093",
-                    "handleGrafanaAlert": true
-                  }
-                ]
-              }
-            }
-        EOF
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      register: grafana_alerting
-      changed_when: "'created' in grafana_alerting.stdout or 'configured' in grafana_alerting.stdout"
-      ignore_errors: yes
+          COMPLETE MONITORING STACK URLS:
+          ================================================
+          Grafana:       http://{{ hostvars[inventory_hostname].ansible_host }}:3000
+          Prometheus:    http://{{ hostvars[inventory_hostname].ansible_host }}:9090
+          Alertmanager:  http://{{ hostvars[inventory_hostname].ansible_host }}:9093
+          ================================================

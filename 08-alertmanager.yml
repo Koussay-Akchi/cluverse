@@ -1,6 +1,6 @@
 ---
-- name: Install Alertmanager
-  hosts: masters
+- name: Install Alertmanager on Monitoring Server
+  hosts: monitors
   become: yes
   vars:
     smtp_server: "{{ alertmanager_smtp_server | default('smtp.gmail.com:587') }}"
@@ -9,372 +9,213 @@
     smtp_username: "{{ alertmanager_smtp_username | default('') }}"
     smtp_password: "{{ alertmanager_smtp_password | default('') }}"
   tasks:
-    - name: Create alertmanager ConfigMap
-      shell: |
-        cat <<EOF | kubectl apply -f -
-        apiVersion: v1
-        kind: ConfigMap
-        metadata:
-          name: alertmanager-config
-          namespace: prometheus
-        data:
-          alertmanager.yml: |
-            global:
-              resolve_timeout: 5m
-              smtp_smarthost: '{{ smtp_server }}'
-              smtp_from: '{{ smtp_from }}'
-              smtp_auth_username: '{{ smtp_username }}'
-              smtp_auth_password: '{{ smtp_password }}'
-              smtp_require_tls: true
+    - name: Create alertmanager user
+      user:
+        name: alertmanager
+        system: yes
+        shell: /bin/false
+        create_home: no
 
-            templates:
-              - '/etc/alertmanager/templates/*.tmpl'
+    - name: Create alertmanager directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: alertmanager
+        group: alertmanager
+        mode: '0755'
+      loop:
+        - /etc/alertmanager
+        - /var/lib/alertmanager
 
-            route:
-              receiver: 'email-receiver'
-              group_by: ['alertname', 'cluster', 'service']
-              group_wait: 30s
-              group_interval: 5m
-              repeat_interval: 4h
-              routes:
-                - match:
-                    severity: critical
-                  receiver: 'email-critical'
-                  group_wait: 10s
-                  repeat_interval: 1h
-                - match:
-                    severity: warning
-                  receiver: 'email-warning'
-                  repeat_interval: 2h
+    - name: Download Alertmanager
+      get_url:
+        url: https://github.com/prometheus/alertmanager/releases/download/v0.27.0/alertmanager-0.27.0.linux-amd64.tar.gz
+        dest: /tmp/alertmanager.tar.gz
 
-            receivers:
-            - name: 'email-receiver'
-              email_configs:
-              - to: '{{ smtp_to }}'
-                from: '{{ smtp_from }}'
-                smarthost: '{{ smtp_server }}'
-                auth_username: '{{ smtp_username }}'
-                auth_password: '{{ smtp_password }}'
-                require_tls: true
-                headers:
-                  Subject: '[Kubernetes] Alert: {{ .GroupLabels.alertname }}'
-                html: |
-                  <h2>Alert Summary</h2>
-                  <p><strong>Cluster:</strong> {{ .GroupLabels.cluster }}</p>
-                  <p><strong>Status:</strong> {{ .Status }}</p>
-                  <p><strong>Alerts Count:</strong> {{ len .Alerts }}</p>
-                  <h3>Firing Alerts</h3>
-                  {{ range .Alerts.Firing }}
-                  <div style="border: 1px solid #ddd; margin: 10px 0; padding: 10px;">
-                    <p><strong>{{ .Labels.alertname }}</strong></p>
-                    <p>Severity: <span style="color: red;">{{ .Labels.severity }}</span></p>
-                    <p>Instance: {{ .Labels.instance }}</p>
-                    <p>{{ .Annotations.description }}</p>
-                    <p style="font-size: 0.9em; color: #666;">{{ .StartsAt }}</p>
-                  </div>
-                  {{ end }}
-                  <h3>Resolved Alerts</h3>
-                  {{ range .Alerts.Resolved }}
-                  <div style="border: 1px solid #ddd; margin: 10px 0; padding: 10px;">
-                    <p><strong>{{ .Labels.alertname }}</strong></p>
-                    <p>Severity: <span style="color: green;">{{ .Labels.severity }}</span></p>
-                    <p>Instance: {{ .Labels.instance }}</p>
-                    <p>{{ .Annotations.description }}</p>
-                    <p style="font-size: 0.9em; color: #666;">Resolved at {{ .EndsAt }}</p>
-                  </div>
-                  {{ end }}
+    - name: Extract Alertmanager
+      unarchive:
+        src: /tmp/alertmanager.tar.gz
+        dest: /tmp/
+        remote_src: yes
 
-            - name: 'email-critical'
-              email_configs:
-              - to: '{{ smtp_to }}'
-                from: '{{ smtp_from }}'
-                smarthost: '{{ smtp_server }}'
-                auth_username: '{{ smtp_username }}'
-                auth_password: '{{ smtp_password }}'
-                require_tls: true
-                headers:
-                  Subject: '[CRITICAL] {{ .GroupLabels.alertname }} - IMMEDIATE ACTION REQUIRED'
+    - name: Copy Alertmanager binaries
+      copy:
+        src: "/tmp/alertmanager-0.27.0.linux-amd64/{{ item }}"
+        dest: "/usr/local/bin/{{ item }}"
+        remote_src: yes
+        owner: alertmanager
+        group: alertmanager
+        mode: '0755'
+      loop:
+        - alertmanager
+        - amtool
 
-            - name: 'email-warning'
-              email_configs:
-              - to: '{{ smtp_to }}'
-                from: '{{ smtp_from }}'
-                smarthost: '{{ smtp_server }}'
-                auth_username: '{{ smtp_username }}'
-                auth_password: '{{ smtp_password }}'
-                require_tls: true
-                headers:
-                  Subject: '[WARNING] {{ .GroupLabels.alertname }}'
+    - name: Create Alertmanager configuration
+      copy:
+        content: |
+          global:
+            resolve_timeout: 5m
+            smtp_smarthost: '{{ smtp_server }}'
+            smtp_from: '{{ smtp_from }}'
+            smtp_auth_username: '{{ smtp_username }}'
+            smtp_auth_password: '{{ smtp_password }}'
+            smtp_require_tls: true
 
-            inhibit_rules:
-              - source_match:
-                  severity: 'critical'
-                target_match:
-                  severity: 'warning'
-                equal: ['alertname', 'kubernetes_namespace']
-        EOF
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      register: alertmanager_config
-      changed_when: "'created' in alertmanager_config.stdout or 'configured' in alertmanager_config.stdout"
+          route:
+            receiver: 'email-receiver'
+            group_by: ['alertname', 'cluster', 'service']
+            group_wait: 30s
+            group_interval: 5m
+            repeat_interval: 4h
+            routes:
+              - match:
+                  severity: critical
+                receiver: 'email-critical'
+                group_wait: 10s
+                repeat_interval: 1h
+              - match:
+                  severity: warning
+                receiver: 'email-warning'
+                repeat_interval: 2h
 
-    - name: Deploy Alertmanager
-      shell: |
-        cat <<EOF | kubectl apply -f -
-        apiVersion: apps/v1
-        kind: Deployment
-        metadata:
-          name: alertmanager
-          namespace: prometheus
-        spec:
-          replicas: 1
-          selector:
-            matchLabels:
-              app: alertmanager
-          template:
-            metadata:
-              labels:
-                app: alertmanager
-            spec:
-              containers:
-              - name: alertmanager
-                image: prom/alertmanager:latest
-                args:
-                  - '--config.file=/etc/alertmanager/alertmanager.yml'
-                  - '--storage.path=/alertmanager'
-                  - '--web.external-url=http://alertmanager.prometheus.svc.cluster.local:9093'
-                ports:
-                - containerPort: 9093
-                  name: web
-                volumeMounts:
-                - name: config
-                  mountPath: /etc/alertmanager
-                - name: storage
-                  mountPath: /alertmanager
-                resources:
-                  requests:
-                    cpu: 50m
-                    memory: 128Mi
-                  limits:
-                    cpu: 200m
-                    memory: 512Mi
-              volumes:
-              - name: config
-                configMap:
-                  name: alertmanager-config
-              - name: storage
-                emptyDir: {}
-        ---
-        apiVersion: v1
-        kind: Service
-        metadata:
-          name: alertmanager
-          namespace: prometheus
-        spec:
-          selector:
-            app: alertmanager
-          ports:
-          - port: 9093
-            targetPort: 9093
-            nodePort: 30093
-            name: web
-          type: NodePort
-        EOF
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      register: alertmanager_deploy
-      changed_when: "'created' in alertmanager_deploy.stdout or 'configured' in alertmanager_deploy.stdout"
+          receivers:
+          - name: 'email-receiver'
+            email_configs:
+            - to: '{{ smtp_to }}'
+              from: '{{ smtp_from }}'
+              smarthost: '{{ smtp_server }}'
+              auth_username: '{{ smtp_username }}'
+              auth_password: '{{ smtp_password }}'
+              require_tls: true
+              headers:
+                Subject: '[Kubernetes] Alert: {{ .GroupLabels.alertname }}'
+              html: |
+                <h2>Alert Summary</h2>
+                <p><strong>Cluster:</strong> {{ .GroupLabels.cluster }}</p>
+                <p><strong>Status:</strong> {{ .Status }}</p>
+                <p><strong>Alerts Count:</strong> {{ len .Alerts }}</p>
+                <h3>Firing Alerts</h3>
+                {{ range .Alerts.Firing }}
+                <div style="border: 1px solid #ddd; margin: 10px 0; padding: 10px;">
+                  <p><strong>{{ .Labels.alertname }}</strong></p>
+                  <p>Severity: <span style="color: red;">{{ .Labels.severity }}</span></p>
+                  <p>Instance: {{ .Labels.instance }}</p>
+                  <p>{{ .Annotations.description }}</p>
+                  <p style="font-size: 0.9em; color: #666;">{{ .StartsAt }}</p>
+                </div>
+                {{ end }}
+                <h3>Resolved Alerts</h3>
+                {{ range .Alerts.Resolved }}
+                <div style="border: 1px solid #ddd; margin: 10px 0; padding: 10px;">
+                  <p><strong>{{ .Labels.alertname }}</strong></p>
+                  <p>Severity: <span style="color: green;">{{ .Labels.severity }}</span></p>
+                  <p>Instance: {{ .Labels.instance }}</p>
+                  <p>{{ .Annotations.description }}</p>
+                  <p style="font-size: 0.9em; color: #666;">Resolved at {{ .EndsAt }}</p>
+                </div>
+                {{ end }}
 
-    - name: Wait for Alertmanager deployment
-      shell: kubectl rollout status deployment/alertmanager -n prometheus --kubeconfig=/etc/kubernetes/admin.conf
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      retries: 15
-      delay: 10
+          - name: 'email-critical'
+            email_configs:
+            - to: '{{ smtp_to }}'
+              from: '{{ smtp_from }}'
+              smarthost: '{{ smtp_server }}'
+              auth_username: '{{ smtp_username }}'
+              auth_password: '{{ smtp_password }}'
+              require_tls: true
+              headers:
+                Subject: '[CRITICAL] {{ .GroupLabels.alertname }} - IMMEDIATE ACTION REQUIRED'
 
-    - name: Deploy node-exporter for metrics collection
-      shell: |
-        cat <<EOF | kubectl apply -f -
-        apiVersion: apps/v1
-        kind: DaemonSet
-        metadata:
-          name: node-exporter
-          namespace: prometheus
-        spec:
-          selector:
-            matchLabels:
-              app: node-exporter
-          template:
-            metadata:
-              labels:
-                app: node-exporter
-              annotations:
-                prometheus.io/scrape: 'true'
-                prometheus.io/port: '9100'
-            spec:
-              hostNetwork: true
-              hostPID: true
-              containers:
-              - name: node-exporter
-                image: prom/node-exporter:latest
-                args:
-                  - '--path.procfs=/host/proc'
-                  - '--path.sysfs=/host/sys'
-                  - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
-                ports:
-                - containerPort: 9100
-                  name: metrics
-                volumeMounts:
-                - name: proc
-                  mountPath: /host/proc
-                - name: sys
-                  mountPath: /host/sys
-                - name: rootfs
-                  mountPath: /rootfs
-                  readOnly: true
-                resources:
-                  requests:
-                    cpu: 50m
-                    memory: 64Mi
-                  limits:
-                    cpu: 100m
-                    memory: 128Mi
-              volumes:
-              - name: proc
-                hostPath:
-                  path: /proc
-              - name: sys
-                hostPath:
-                  path: /sys
-              - name: rootfs
-                hostPath:
-                  path: /
-        ---
-        apiVersion: v1
-        kind: Service
-        metadata:
-          name: node-exporter
-          namespace: prometheus
-        spec:
-          selector:
-            app: node-exporter
-          ports:
-          - port: 9100
-            targetPort: 9100
-            name: metrics
-          type: ClusterIP
-        EOF
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      register: node_exporter
-      changed_when: "'created' in node_exporter.stdout or 'configured' in node_exporter.stdout"
+          - name: 'email-warning'
+            email_configs:
+            - to: '{{ smtp_to }}'
+              from: '{{ smtp_from }}'
+              smarthost: '{{ smtp_server }}'
+              auth_username: '{{ smtp_username }}'
+              auth_password: '{{ smtp_password }}'
+              require_tls: true
+              headers:
+                Subject: '[WARNING] {{ .GroupLabels.alertname }}'
 
-    - name: Deploy kube-state-metrics
-      shell: |
-        cat <<EOF | kubectl apply -f -
-        apiVersion: apps/v1
-        kind: Deployment
-        metadata:
-          name: kube-state-metrics
-          namespace: prometheus
-        spec:
-          replicas: 1
-          selector:
-            matchLabels:
-              app: kube-state-metrics
-          template:
-            metadata:
-              labels:
-                app: kube-state-metrics
-              annotations:
-                prometheus.io/scrape: 'true'
-                prometheus.io/port: '8080'
-            spec:
-              serviceAccountName: kube-state-metrics
-              containers:
-              - name: kube-state-metrics
-                image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.12.0
-                ports:
-                - containerPort: 8080
-                  name: metrics
-                resources:
-                  requests:
-                    cpu: 50m
-                    memory: 64Mi
-                  limits:
-                    cpu: 100m
-                    memory: 256Mi
-        ---
-        apiVersion: v1
-        kind: ServiceAccount
-        metadata:
-          name: kube-state-metrics
-          namespace: prometheus
-        ---
-        apiVersion: rbac.authorization.k8s.io/v1
-        kind: ClusterRole
-        metadata:
-          name: kube-state-metrics
-        rules:
-        - apiGroups: [""]
-          resources: ["configmaps", "secrets", "nodes", "pods", "services", "resourcequotas", "replicationcontrollers", "limitranges", "persistentvolumeclaims", "persistentvolumes", "namespaces", "endpoints"]
-          verbs: ["list", "watch"]
-        - apiGroups: ["apps"]
-          resources: ["statefulsets", "daemonsets", "deployments", "replicasets"]
-          verbs: ["list", "watch"]
-        - apiGroups: ["batch"]
-          resources: ["jobs", "cronjobs"]
-          verbs: ["list", "watch"]
-        ---
-        apiVersion: rbac.authorization.k8s.io/v1
-        kind: ClusterRoleBinding
-        metadata:
-          name: kube-state-metrics
-        roleRef:
-          apiGroup: rbac.authorization.k8s.io
-          kind: ClusterRole
-          name: kube-state-metrics
-        subjects:
-        - kind: ServiceAccount
-          name: kube-state-metrics
-          namespace: prometheus
-        ---
-        apiVersion: v1
-        kind: Service
-        metadata:
-          name: kube-state-metrics
-          namespace: prometheus
-        spec:
-          selector:
-            app: kube-state-metrics
-          ports:
-          - port: 8080
-            targetPort: 8080
-            name: metrics
-          type: ClusterIP
-        EOF
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      register: kube_state_metrics
-      changed_when: "'created' in kube_state_metrics.stdout or 'configured' in kube_state_metrics.stdout"
+          inhibit_rules:
+            - source_match:
+                severity: 'critical'
+              target_match:
+                severity: 'warning'
+              equal: ['alertname', 'kubernetes_namespace']
+        dest: /etc/alertmanager/alertmanager.yml
+        owner: alertmanager
+        group: alertmanager
+        mode: '0644'
 
-    - name: Wait for kube-state-metrics deployment
-      shell: kubectl rollout status deployment/kube-state-metrics -n prometheus --kubeconfig=/etc/kubernetes/admin.conf
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      retries: 15
-      delay: 10
+    - name: Create Alertmanager systemd service
+      copy:
+        content: |
+          [Unit]
+          Description=Alertmanager
+          Wants=network-online.target
+          After=network-online.target
 
-    - name: Get Alertmanager NodePort
-      shell: kubectl get service alertmanager -n prometheus --kubeconfig=/etc/kubernetes/admin.conf -o jsonpath='{.spec.ports[0].nodePort}'
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      register: alertmanager_nodeport
-      changed_when: false
+          [Service]
+          User=alertmanager
+          Group=alertmanager
+          Type=simple
+          ExecStart=/usr/local/bin/alertmanager \
+            --config.file=/etc/alertmanager/alertmanager.yml \
+            --storage.path=/var/lib/alertmanager \
+            --web.listen-address=0.0.0.0:9093 \
+            --cluster.listen-address=
 
-    - name: Display Alertmanager Access Info
+          Restart=always
+          RestartSec=10s
+
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/alertmanager.service
+        mode: '0644'
+
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable and start Alertmanager
+      systemd:
+        name: alertmanager
+        state: started
+        enabled: yes
+
+    - name: Wait for Alertmanager to be ready
+      wait_for:
+        port: 9093
+        delay: 5
+        timeout: 60
+
+    - name: Restart Prometheus to connect to Alertmanager
+      systemd:
+        name: prometheus
+        state: restarted
+      ignore_errors: yes
+
+    - name: Display Alertmanager access info
       debug:
         msg: |
-          Alertmanager is now deployed and accessible!
-          Access Alertmanager via: http://MASTER_NODE_IP:{{ alertmanager_nodeport.stdout }}
-          Alertmanager Service URL (internal): http://alertmanager.prometheus.svc.cluster.local:9093
+          ================================================
+          ALERTMANAGER STANDALONE INSTALLATION COMPLETE
+          ================================================
+          
+          Access Alertmanager Dashboard:
+          Provider Network: http://{{ hostvars[inventory_hostname].ansible_host }}:9093
+          
+          Configuration:
+          - Connected to Prometheus
+          - Email notifications configured
+          - Alert routing configured
+          
+          SMTP Configuration (update if needed):
+          - Server: {{ smtp_server }}
+          - From: {{ smtp_from }}
+          - To: {{ smtp_to }}
+          
+          To update SMTP settings, edit /etc/alertmanager/alertmanager.yml
+          and restart: systemctl restart alertmanager
+          ================================================
