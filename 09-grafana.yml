@@ -152,7 +152,7 @@
                   {
                     "expr": "up{job=\"kubernetes-nodes\"}",
                     "interval": "",
-                    "legendFormat": "{{node}}",
+                    "legendFormat": "{{ '{{node}}' }}",
                     "refId": "A"
                   }
                 ],
@@ -198,7 +198,7 @@
                   {
                     "expr": "(1 - avg(irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) by (instance)) * 100",
                     "interval": "",
-                    "legendFormat": "{{instance}}",
+                    "legendFormat": "{{ '{{instance}}' }}",
                     "refId": "A"
                   }
                 ],
@@ -244,7 +244,7 @@
                   {
                     "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
                     "interval": "",
-                    "legendFormat": "{{instance}}",
+                    "legendFormat": "{{ '{{instance}}' }}",
                     "refId": "A"
                   }
                 ],
@@ -290,13 +290,13 @@
                   {
                     "expr": "rate(node_network_receive_bytes_total{device!=\"lo\"}[5m])",
                     "interval": "",
-                    "legendFormat": "RX {{instance}} - {{device}}",
+                    "legendFormat": "RX {{ '{{instance}}' }} - {{ '{{device}}' }}",
                     "refId": "A"
                   },
                   {
                     "expr": "rate(node_network_transmit_bytes_total{device!=\"lo\"}[5m])",
                     "interval": "",
-                    "legendFormat": "TX {{instance}} - {{device}}",
+                    "legendFormat": "TX {{ '{{instance}}' }} - {{ '{{device}}' }}",
                     "refId": "B"
                   }
                 ],
@@ -342,7 +342,7 @@
                   {
                     "expr": "sum by (phase) (kube_pod_status_phase)",
                     "interval": "",
-                    "legendFormat": "{{phase}}",
+                    "legendFormat": "{{ '{{phase}}' }}",
                     "refId": "A"
                   }
                 ],
@@ -479,7 +479,7 @@
           ================================================
           
           Access Grafana Dashboard:
-          Provider Network: http://{{ hostvars[inventory_hostname].ansible_host }}:3000
+          Provider Network: http://{{ "{{" }} hostvars[inventory_hostname].ansible_host {{ "}}" }}:3000
           
           Default Credentials:
           Username: admin
@@ -495,7 +495,7 @@
           
           COMPLETE MONITORING STACK URLS:
           ================================================
-          Grafana:       http://{{ hostvars[inventory_hostname].ansible_host }}:3000
-          Prometheus:    http://{{ hostvars[inventory_hostname].ansible_host }}:9090
-          Alertmanager:  http://{{ hostvars[inventory_hostname].ansible_host }}:9093
+          Grafana:       http://{{ "{{" }} hostvars[inventory_hostname].ansible_host {{ "}}" }}:3000
+          Prometheus:    http://{{ "{{" }} hostvars[inventory_hostname].ansible_host {{ "}}" }}:9090
+          Alertmanager:  http://{{ "{{" }} hostvars[inventory_hostname].ansible_host {{ "}}" }}:9093
           ================================================
