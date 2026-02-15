@@ -210,7 +210,7 @@
             rules:
             - alert: KubernetesNodeNotReady
               expr: kube_node_status_condition{condition="Ready",status="true"} == 0
-              for: 5m
+              for: 30s
               labels:
                 severity: critical
               annotations:
@@ -219,7 +219,7 @@
 
             - alert: KubernetesMemoryPressure
               expr: kube_node_status_condition{condition="MemoryPressure",status="true"} == 1
-              for: 5m
+              for: 30s
               labels:
                 severity: warning
               annotations:
@@ -228,7 +228,7 @@
 
             - alert: KubernetesDiskPressure
               expr: kube_node_status_condition{condition="DiskPressure",status="true"} == 1
-              for: 5m
+              for: 30s
               labels:
                 severity: warning
               annotations:
@@ -237,7 +237,7 @@
 
             - alert: KubernetesPodCrashLooping
               expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
-              for: 5m
+              for: 30s
               labels:
                 severity: warning
               annotations:
@@ -245,22 +245,22 @@
                 description: "Pod {{ "{{" }} $labels.namespace {{ "}}" }}/{{ "{{" }} $labels.pod {{ "}}" }} has restarted {{ "{{" }} $value {{ "}}" }} times in the last 15 minutes"
 
             - alert: KubernetesNodeHighCPU
-              expr: (100 - (avg by (node) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 80
-              for: 10m
+              expr: (100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 80
+              for: 30s
               labels:
                 severity: warning
               annotations:
-                summary: "Node {{ "{{" }} $labels.node {{ "}}" }} high CPU usage"
-                description: "Node {{ "{{" }} $labels.node {{ "}}" }} has CPU usage above 80% for more than 10 minutes"
+                summary: "Node {{ "{{" }} $labels.instance {{ "}}" }} high CPU usage"
+                description: "Node {{ "{{" }} $labels.instance {{ "}}" }} has CPU usage above 80% for more than 30 seconds"
 
             - alert: KubernetesNodeHighMemory
               expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
-              for: 10m
+              for: 30s
               labels:
                 severity: warning
               annotations:
-                summary: "Node {{ "{{" }} $labels.node {{ "}}" }} high memory usage"
-                description: "Node {{ "{{" }} $labels.node {{ "}}" }} has memory usage above 85% for more than 10 minutes"
+                summary: "Node {{ "{{" }} $labels.instance {{ "}}" }} high memory usage"
+                description: "Node {{ "{{" }} $labels.instance {{ "}}" }} has memory usage above 85% for more than 30 seconds"
         dest: /etc/prometheus/rules.yml
         owner: prometheus
         group: prometheus
@@ -304,6 +304,11 @@
         name: prometheus
         state: started
         enabled: yes
+
+    - name: Restart Prometheus to reload configuration
+      systemd:
+        name: prometheus
+        state: restarted
 
     - name: Wait for Prometheus to be ready
       wait_for:
