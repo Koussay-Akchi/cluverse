@@ -1,0 +1,20 @@
+---
+- name: Check if joined
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: kubelet_conf
+
+- name: Read join command
+  ansible.builtin.slurp:
+    src: /tmp/kubeadm_join.sh
+  register: join_command_file
+  delegate_to: localhost
+  when: not kubelet_conf.stat.exists
+
+- name: Join cluster
+  ansible.builtin.shell: "{{ join_command_file.content | b64decode }}"
+  register: join_result
+  retries: 3
+  delay: 10
+  when: not kubelet_conf.stat.exists
+

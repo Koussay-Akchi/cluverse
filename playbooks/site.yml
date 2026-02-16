@@ -1,0 +1,36 @@
+---
+# Run the full stack (k8s + monitoring) using role `hexaweb`.
+# Usage:
+#   cd /root/k8s-ansible/playbooks
+#   ansible-playbook site.yml
+
+- name: Common setup
+  ansible.builtin.import_playbook: 01-common.yml
+
+- name: Container runtime
+  ansible.builtin.import_playbook: 02-containerd.yml
+
+- name: Kubernetes packages
+  ansible.builtin.import_playbook: 03-kubernetes.yml
+
+- name: Initialize control plane
+  ansible.builtin.import_playbook: 04-masters.yml
+
+- name: Join workers
+  ansible.builtin.import_playbook: 05-workers.yml
+
+- name: Verify cluster
+  ansible.builtin.import_playbook: 06-verify.yml
+
+- name: Prometheus + k8s integration
+  ansible.builtin.import_playbook: 07-prometheus.yml
+
+- name: Alertmanager
+  ansible.builtin.import_playbook: 08-alertmanager.yml
+
+- name: Grafana
+  ansible.builtin.import_playbook: 09-grafana.yml
+
+- name: Prophet AI app
+  ansible.builtin.import_playbook: 10-ai.yml
+

@@ -1,0 +1,72 @@
+---
+- name: Create keyrings directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+- name: Download Docker GPG key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /tmp/docker-release.key
+  retries: 3
+  delay: 5
+
+- name: Add Docker GPG key
+  ansible.builtin.shell: cat /tmp/docker-release.key | gpg --dearmor -o /etc/apt/keyrings/docker.gpg --yes
+  args:
+    creates: /etc/apt/keyrings/docker.gpg
+
+- name: Remove existing Docker repository
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/download_docker_com_linux_ubuntu.list
+    state: absent
+
+- name: Add Docker repository
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+    update_cache: no
+
+- name: Update apt cache after adding Docker repo
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 0
+
+- name: Install containerd
+  ansible.builtin.apt:
+    name: containerd.io
+    state: present
+    update_cache: no
+
+- name: Create containerd config directory
+  ansible.builtin.file:
+    path: /etc/containerd
+    state: directory
+    mode: '0755'
+
+- name: Generate default containerd config
+  ansible.builtin.shell: containerd config default > /etc/containerd/config.toml
+  args:
+    creates: /etc/containerd/config.toml
+
+- name: Enable systemd cgroup driver for containerd 1.x
+  ansible.builtin.lineinfile:
+    path: /etc/containerd/config.toml
+    regexp: '(\s*)SystemdCgroup\s*=\s*false'
+    line: '\1SystemdCgroup = true'
+    backrefs: yes
+
+- name: Ensure cri is not disabled
+  ansible.builtin.lineinfile:
+    path: /etc/containerd/config.toml
+    regexp: 'disabled_plugins\s*=\s*\["cri"\]'
+    state: absent
+
+- name: Restart containerd
+  ansible.builtin.systemd:
+    name: containerd
+    state: restarted
+    enabled: yes
+    daemon_reload: yes
+

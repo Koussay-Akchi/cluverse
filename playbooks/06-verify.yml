@@ -1,0 +1,8 @@
+---
+- name: Verify cluster
+  hosts: masters
+  become: yes
+  roles:
+    - role: hexaweb
+      hexaweb_tasks_from: 06-verify.yml
+

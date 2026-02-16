@@ -1,0 +1,24 @@
+---
+- name: Install Prometheus on Monitoring Server
+  hosts: monitors
+  become: yes
+  roles:
+    - role: hexaweb
+      hexaweb_tasks_from: 07-prometheus-monitors.yml
+
+- name: Setup Kubernetes for External Prometheus
+  hosts: masters
+  become: yes
+  vars:
+    api_master: "{{ groups['masters'][0] }}"
+  roles:
+    - role: hexaweb
+      hexaweb_tasks_from: 07-prometheus-k8s.yml
+
+- name: Transfer Kubernetes token to Prometheus server
+  hosts: monitors
+  become: yes
+  roles:
+    - role: hexaweb
+      hexaweb_tasks_from: 07-prometheus-transfer.yml
+

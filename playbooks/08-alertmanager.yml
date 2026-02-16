@@ -1,0 +1,8 @@
+---
+- name: Install Alertmanager on Monitoring Server
+  hosts: monitors
+  become: yes
+  roles:
+    - role: hexaweb
+      hexaweb_tasks_from: 08-alertmanager.yml
+

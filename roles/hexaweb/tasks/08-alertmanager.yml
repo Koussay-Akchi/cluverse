@@ -1,0 +1,207 @@
+---
+- name: Create alertmanager user
+  ansible.builtin.user:
+    name: alertmanager
+    system: yes
+    shell: /bin/false
+    create_home: no
+
+- name: Create alertmanager directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: alertmanager
+    group: alertmanager
+    mode: '0755'
+  loop:
+    - /etc/alertmanager
+    - /var/lib/alertmanager
+
+- name: Download Alertmanager
+  ansible.builtin.get_url:
+    url: https://github.com/prometheus/alertmanager/releases/download/v0.27.0/alertmanager-0.27.0.linux-amd64.tar.gz
+    dest: /tmp/alertmanager.tar.gz
+
+- name: Extract Alertmanager
+  ansible.builtin.unarchive:
+    src: /tmp/alertmanager.tar.gz
+    dest: /tmp/
+    remote_src: yes
+
+- name: Copy Alertmanager binaries
+  ansible.builtin.copy:
+    src: "/tmp/alertmanager-0.27.0.linux-amd64/{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    remote_src: yes
+    owner: alertmanager
+    group: alertmanager
+    mode: '0755'
+  loop:
+    - alertmanager
+    - amtool
+
+- name: Create Alertmanager configuration (from group_vars/monitoring.yml)
+  ansible.builtin.copy:
+    content: |
+      global:
+        resolve_timeout: 5m
+        smtp_smarthost: {{ alertmanager_smtp_server | quote }}
+        smtp_from: {{ alertmanager_smtp_from | quote }}
+        smtp_auth_username: {{ alertmanager_smtp_username | quote }}
+        smtp_auth_password: {{ (alertmanager_smtp_password | default('')) | regex_replace('\s+', '') | quote }}
+        smtp_require_tls: true
+
+      route:
+        receiver: 'email-receiver'
+        group_by: ['alertname', 'cluster', 'service']
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 4h
+        routes:
+          - match:
+              severity: critical
+            receiver: 'email-critical'
+            group_wait: 10s
+            repeat_interval: 1h
+          - match:
+              severity: warning
+            receiver: 'email-warning'
+            repeat_interval: 2h
+
+      receivers:
+      - name: 'email-receiver'
+        email_configs:
+        - to: {{ alertmanager_smtp_to | quote }}
+          from: {{ alertmanager_smtp_from | quote }}
+          smarthost: {{ alertmanager_smtp_server | quote }}
+          auth_username: {{ alertmanager_smtp_username | quote }}
+          auth_password: {{ (alertmanager_smtp_password | default('')) | regex_replace('\s+', '') | quote }}
+          require_tls: true
+          headers:
+            Subject: '[Kubernetes] Alert: {{ "{{" }} .GroupLabels.alertname {{ "}}" }}'
+          html: |
+            <h2>Alert Summary</h2>
+            <p><strong>Cluster:</strong> {{ "{{" }} .GroupLabels.cluster {{ "}}" }}</p>
+            <p><strong>Status:</strong> {{ "{{" }} .Status {{ "}}" }}</p>
+            <p><strong>Alerts Count:</strong> {{ "{{" }} len .Alerts {{ "}}" }}</p>
+            <h3>Firing Alerts</h3>
+            {{ "{{" }} range .Alerts.Firing {{ "}}" }}
+            <div style="border: 1px solid #ddd; margin: 10px 0; padding: 10px;">
+              <p><strong>{{ "{{" }} .Labels.alertname {{ "}}" }}</strong></p>
+              <p>Severity: <span style="color: red;">{{ "{{" }} .Labels.severity {{ "}}" }}</span></p>
+              <p>Instance: {{ "{{" }} .Labels.instance {{ "}}" }}</p>
+              <p>{{ "{{" }} .Annotations.description {{ "}}" }}</p>
+              <p style="font-size: 0.9em; color: #666;">{{ "{{" }} .StartsAt {{ "}}" }}</p>
+            </div>
+            {{ "{{" }} end {{ "}}" }}
+            <h3>Resolved Alerts</h3>
+            {{ "{{" }} range .Alerts.Resolved {{ "}}" }}
+            <div style="border: 1px solid #ddd; margin: 10px 0; padding: 10px;">
+              <p><strong>{{ "{{" }} .Labels.alertname {{ "}}" }}</strong></p>
+              <p>Severity: <span style="color: green;">{{ "{{" }} .Labels.severity {{ "}}" }}</span></p>
+              <p>Instance: {{ "{{" }} .Labels.instance {{ "}}" }}</p>
+              <p>{{ "{{" }} .Annotations.description {{ "}}" }}</p>
+              <p style="font-size: 0.9em; color: #666;">Resolved at {{ "{{" }} .EndsAt {{ "}}" }}</p>
+            </div>
+            {{ "{{" }} end {{ "}}" }}
+
+      - name: 'email-critical'
+        email_configs:
+        - to: {{ alertmanager_smtp_to | quote }}
+          from: {{ alertmanager_smtp_from | quote }}
+          smarthost: {{ alertmanager_smtp_server | quote }}
+          auth_username: {{ alertmanager_smtp_username | quote }}
+          auth_password: {{ (alertmanager_smtp_password | default('')) | regex_replace('\s+', '') | quote }}
+          require_tls: true
+          headers:
+            Subject: '[CRITICAL] {{ "{{" }} .GroupLabels.alertname {{ "}}" }} - IMMEDIATE ACTION REQUIRED'
+
+      - name: 'email-warning'
+        email_configs:
+        - to: {{ alertmanager_smtp_to | quote }}
+          from: {{ alertmanager_smtp_from | quote }}
+          smarthost: {{ alertmanager_smtp_server | quote }}
+          auth_username: {{ alertmanager_smtp_username | quote }}
+          auth_password: {{ (alertmanager_smtp_password | default('')) | regex_replace('\s+', '') | quote }}
+          require_tls: true
+          headers:
+            Subject: '[WARNING] {{ "{{" }} .GroupLabels.alertname {{ "}}" }}'
+
+      inhibit_rules:
+        - source_match:
+            severity: 'critical'
+          target_match:
+            severity: 'warning'
+          equal: ['alertname', 'kubernetes_namespace']
+    dest: /etc/alertmanager/alertmanager.yml
+    owner: alertmanager
+    group: alertmanager
+    mode: '0644'
+
+- name: Create Alertmanager systemd service
+  ansible.builtin.copy:
+    content: |
+      [Unit]
+      Description=Alertmanager
+      Wants=network-online.target
+      After=network-online.target
+
+      [Service]
+      User=alertmanager
+      Group=alertmanager
+      Type=simple
+      ExecStart=/usr/local/bin/alertmanager \
+        --config.file=/etc/alertmanager/alertmanager.yml \
+        --storage.path=/var/lib/alertmanager \
+        --web.listen-address=0.0.0.0:9093 \
+        --cluster.listen-address=
+
+      Restart=always
+      RestartSec=10s
+
+      [Install]
+      WantedBy=multi-user.target
+    dest: /etc/systemd/system/alertmanager.service
+    mode: '0644'
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: yes
+
+- name: Enable and start Alertmanager
+  ansible.builtin.systemd:
+    name: alertmanager
+    state: started
+    enabled: yes
+
+- name: Wait for Alertmanager to be ready
+  ansible.builtin.wait_for:
+    port: 9093
+    delay: 5
+    timeout: 60
+
+- name: Restart Prometheus to connect to Alertmanager
+  ansible.builtin.systemd:
+    name: prometheus
+    state: restarted
+  ignore_errors: yes
+
+- name: Display Alertmanager access info
+  ansible.builtin.debug:
+    msg: |
+      ================================================
+      ALERTMANAGER STANDALONE INSTALLATION COMPLETE
+      ================================================
+      
+      Access Alertmanager Dashboard:
+      Provider Network: http://{{ hostvars[inventory_hostname].ansible_host }}:9093
+      
+      Configuration:
+      - Connected to Prometheus
+      - Email notifications configured
+      - Alert routing configured
+      
+      To update SMTP settings, edit /etc/alertmanager/alertmanager.yml
+      and restart: systemctl restart alertmanager
+      ================================================
+

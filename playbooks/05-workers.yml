@@ -1,0 +1,8 @@
+---
+- name: Join workers
+  hosts: workers
+  become: yes
+  roles:
+    - role: hexaweb
+      hexaweb_tasks_from: 05-workers.yml
+

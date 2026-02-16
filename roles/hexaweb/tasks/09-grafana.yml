@@ -1,0 +1,230 @@
+---
+- name: Install prerequisite packages
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - software-properties-common
+      - wget
+    state: present
+    update_cache: yes
+
+- name: Add Grafana GPG key
+  ansible.builtin.apt_key:
+    url: https://apt.grafana.com/gpg.key
+    state: present
+
+- name: Add Grafana repository
+  ansible.builtin.apt_repository:
+    repo: deb https://apt.grafana.com stable main
+    state: present
+    filename: grafana
+
+- name: Install Grafana
+  ansible.builtin.apt:
+    name: grafana
+    state: present
+    update_cache: yes
+
+- name: Create Grafana datasource provisioning directory
+  ansible.builtin.file:
+    path: /etc/grafana/provisioning/datasources
+    state: directory
+    owner: grafana
+    group: grafana
+    mode: '0755'
+
+- name: Create Grafana dashboard provisioning directory
+  ansible.builtin.file:
+    path: /etc/grafana/provisioning/dashboards
+    state: directory
+    owner: grafana
+    group: grafana
+    mode: '0755'
+
+- name: Create Grafana dashboards storage directory
+  ansible.builtin.file:
+    path: /var/lib/grafana/dashboards
+    state: directory
+    owner: grafana
+    group: grafana
+    mode: '0755'
+
+- name: Configure Prometheus datasource
+  ansible.builtin.copy:
+    content: |
+      apiVersion: 1
+      datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://localhost:9090
+        isDefault: true
+        editable: true
+        jsonData:
+          timeInterval: 15s
+    dest: /etc/grafana/provisioning/datasources/prometheus.yaml
+    owner: grafana
+    group: grafana
+    mode: '0644'
+
+- name: Configure dashboard provider
+  ansible.builtin.copy:
+    content: |
+      apiVersion: 1
+      providers:
+      - name: 'default'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        updateIntervalSeconds: 10
+        allowUiUpdates: true
+        options:
+          path: /var/lib/grafana/dashboards
+    dest: /etc/grafana/provisioning/dashboards/dashboard-provider.yaml
+    owner: grafana
+    group: grafana
+    mode: '0644'
+
+- name: Create Kubernetes cluster dashboard
+  ansible.builtin.copy:
+    content: |
+      {
+        "annotations": {
+          "list": [
+            {
+              "builtIn": 1,
+              "datasource": "-- Grafana --",
+              "enable": true,
+              "hide": true,
+              "iconColor": "rgba(0, 211, 255, 1)",
+              "name": "Annotations & Alerts",
+              "type": "dashboard"
+            }
+          ]
+        },
+        "editable": true,
+        "gnetId": null,
+        "graphTooltip": 0,
+        "id": null,
+        "links": [],
+        "panels": [
+          {
+            "datasource": "Prometheus",
+            "fieldConfig": {
+              "defaults": {
+                "color": {"mode": "palette-classic"},
+                "custom": {
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "gradientMode": "none",
+                  "hideFrom": {"tooltip": false, "viz": false, "legend": false},
+                  "lineInterpolation": "linear",
+                  "lineWidth": 1,
+                  "pointSize": 5,
+                  "scaleDistribution": {"type": "linear"},
+                  "showPoints": "never",
+                  "spanNulls": true
+                },
+                "mappings": [],
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [{"color": "green", "value": null}]
+                },
+                "unit": "short"
+              },
+              "overrides": []
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+            "id": 1,
+            "options": {
+              "legend": {"calcs": [], "displayMode": "list", "placement": "bottom"},
+              "tooltip": {"mode": "single"}
+            },
+            "targets": [
+              {
+                "expr": "up{job=\"kubernetes-nodes\"}",
+                "interval": "",
+                "legendFormat": "{{ '{{node}}' }}",
+                "refId": "A"
+              }
+            ],
+            "title": "Node Status",
+            "type": "timeseries"
+          }
+        ],
+        "schemaVersion": 35,
+        "style": "dark",
+        "tags": ["kubernetes", "monitoring"],
+        "templating": {"list": []},
+        "time": {"from": "now-6h", "to": "now"},
+        "timepicker": {},
+        "timezone": "",
+        "title": "Kubernetes Cluster Overview",
+        "uid": "kubernetes-cluster",
+        "version": 1,
+        "weekStart": ""
+      }
+    dest: /var/lib/grafana/dashboards/kubernetes-cluster.json
+    owner: grafana
+    group: grafana
+    mode: '0644'
+
+- name: Configure Grafana to listen on all interfaces
+  ansible.builtin.lineinfile:
+    path: /etc/grafana/grafana.ini
+    regexp: '^;?http_addr ='
+    line: 'http_addr = 0.0.0.0'
+    state: present
+
+- name: Configure Grafana port
+  ansible.builtin.lineinfile:
+    path: /etc/grafana/grafana.ini
+    regexp: '^;?http_port ='
+    line: 'http_port = 3000'
+    state: present
+
+- name: Enable and start Grafana
+  ansible.builtin.systemd:
+    name: grafana-server
+    state: started
+    enabled: yes
+
+- name: Wait for Grafana to be ready
+  ansible.builtin.wait_for:
+    port: 3000
+    delay: 5
+    timeout: 60
+
+- name: Display Grafana access info
+  ansible.builtin.debug:
+    msg: |
+      ================================================
+      GRAFANA STANDALONE INSTALLATION COMPLETE
+      ================================================
+      
+      Access Grafana Dashboard:
+      Provider Network: http://{{ "{{" }} hostvars[inventory_hostname].ansible_host {{ "}}" }}:3000
+      
+      Default Credentials:
+      Username: admin
+      Password: admin
+      (You will be prompted to change password on first login)
+      
+      Configuration:
+      - Prometheus datasource configured automatically
+      - Kubernetes cluster dashboard pre-loaded
+      - Dashboard updates allowed
+      
+      ================================================
+      
+      COMPLETE MONITORING STACK URLS:
+      ================================================
+      Grafana:       http://{{ "{{" }} hostvars[inventory_hostname].ansible_host {{ "}}" }}:3000
+      Prometheus:    http://{{ "{{" }} hostvars[inventory_hostname].ansible_host {{ "}}" }}:9090
+      Alertmanager:  http://{{ "{{" }} hostvars[inventory_hostname].ansible_host {{ "}}" }}:9093
+      ================================================
+

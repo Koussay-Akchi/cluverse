@@ -1,0 +1,8 @@
+---
+- name: Install containerd
+  hosts: all
+  become: yes
+  roles:
+    - role: hexaweb
+      hexaweb_tasks_from: 02-containerd.yml
+

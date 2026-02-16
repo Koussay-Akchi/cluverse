@@ -1,0 +1,321 @@
+---
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: yes
+
+- name: Create prometheus user
+  ansible.builtin.user:
+    name: prometheus
+    system: yes
+    shell: /bin/false
+    create_home: no
+
+- name: Create prometheus directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: prometheus
+    group: prometheus
+    mode: '0755'
+  loop:
+    - /etc/prometheus
+    - /var/lib/prometheus
+
+- name: Download Prometheus
+  ansible.builtin.get_url:
+    url: https://github.com/prometheus/prometheus/releases/download/v2.48.0/prometheus-2.48.0.linux-amd64.tar.gz
+    dest: /tmp/prometheus.tar.gz
+
+- name: Extract Prometheus
+  ansible.builtin.unarchive:
+    src: /tmp/prometheus.tar.gz
+    dest: /tmp/
+    remote_src: yes
+
+- name: Copy Prometheus binaries
+  ansible.builtin.copy:
+    src: "/tmp/prometheus-2.48.0.linux-amd64/{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    remote_src: yes
+    owner: prometheus
+    group: prometheus
+    mode: '0755'
+  loop:
+    - prometheus
+    - promtool
+
+- name: Copy Prometheus console files
+  ansible.builtin.copy:
+    src: "/tmp/prometheus-2.48.0.linux-amd64/{{ item }}"
+    dest: "/etc/prometheus/{{ item }}"
+    remote_src: yes
+    owner: prometheus
+    group: prometheus
+  loop:
+    - consoles
+    - console_libraries
+
+- name: Create Prometheus configuration
+  ansible.builtin.copy:
+    content: |
+      global:
+        scrape_interval: 15s
+        evaluation_interval: 15s
+        external_labels:
+          cluster: 'kubernetes'
+          environment: 'production'
+
+      rule_files:
+        - '/etc/prometheus/rules.yml'
+
+      alerting:
+        alertmanagers:
+          - static_configs:
+              - targets:
+                  - localhost:9093
+
+      scrape_configs:
+        - job_name: 'prometheus'
+          static_configs:
+            - targets: ['localhost:9090']
+
+        - job_name: 'kubernetes-apiservers'
+          kubernetes_sd_configs:
+            - api_server: https://{{ hostvars[groups['masters'][0]].ansible_host }}:6443
+              role: endpoints
+              tls_config:
+                insecure_skip_verify: true
+              bearer_token_file: /etc/prometheus/k8s-token
+          scheme: https
+          tls_config:
+            insecure_skip_verify: true
+          bearer_token_file: /etc/prometheus/k8s-token
+          relabel_configs:
+            - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+              action: keep
+              regex: default;kubernetes;https
+
+        - job_name: 'kubernetes-nodes'
+          kubernetes_sd_configs:
+            - api_server: https://{{ hostvars[groups['masters'][0]].ansible_host }}:6443
+              role: node
+              tls_config:
+                insecure_skip_verify: true
+              bearer_token_file: /etc/prometheus/k8s-token
+          scheme: https
+          tls_config:
+            insecure_skip_verify: true
+          bearer_token_file: /etc/prometheus/k8s-token
+          relabel_configs:
+            - action: labelmap
+              regex: __meta_kubernetes_node_label_(.+)
+
+        - job_name: 'kubernetes-pods'
+          kubernetes_sd_configs:
+            - api_server: https://{{ hostvars[groups['masters'][0]].ansible_host }}:6443
+              role: pod
+              tls_config:
+                insecure_skip_verify: true
+              bearer_token_file: /etc/prometheus/k8s-token
+          relabel_configs:
+            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+              action: keep
+              regex: 'true'
+            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+              action: replace
+              target_label: __metrics_path__
+              regex: (.+)
+            - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+              action: replace
+              regex: ([^:]+)(?::\d+)?;(\d+)
+              replacement: $1:$2
+              target_label: __address__
+            - action: labelmap
+              regex: __meta_kubernetes_pod_label_(.+)
+            - source_labels: [__meta_kubernetes_namespace]
+              action: replace
+              target_label: kubernetes_namespace
+            - source_labels: [__meta_kubernetes_pod_name]
+              action: replace
+              target_label: kubernetes_pod_name
+
+        - job_name: 'kubernetes-cadvisor'
+          kubernetes_sd_configs:
+            - api_server: https://{{ hostvars[groups['masters'][0]].ansible_host }}:6443
+              role: node
+              tls_config:
+                insecure_skip_verify: true
+              bearer_token_file: /etc/prometheus/k8s-token
+          scheme: https
+          tls_config:
+            insecure_skip_verify: true
+          bearer_token_file: /etc/prometheus/k8s-token
+          metrics_path: /metrics/cadvisor
+          relabel_configs:
+            - action: labelmap
+              regex: __meta_kubernetes_node_label_(.+)
+
+        - job_name: 'kube-state-metrics'
+          kubernetes_sd_configs:
+            - api_server: https://{{ hostvars[groups['masters'][0]].ansible_host }}:6443
+              role: service
+              tls_config:
+                insecure_skip_verify: true
+              bearer_token_file: /etc/prometheus/k8s-token
+          relabel_configs:
+            - source_labels: [__meta_kubernetes_service_name]
+              action: keep
+              regex: kube-state-metrics
+            - source_labels: [__meta_kubernetes_namespace]
+              action: keep
+              regex: kube-system
+            - source_labels: [__meta_kubernetes_service_port_name]
+              action: keep
+              regex: http-metrics
+
+        - job_name: 'node-exporter'
+          kubernetes_sd_configs:
+            - api_server: https://{{ hostvars[groups['masters'][0]].ansible_host }}:6443
+              role: pod
+              tls_config:
+                insecure_skip_verify: true
+              bearer_token_file: /etc/prometheus/k8s-token
+          relabel_configs:
+            - source_labels: [__meta_kubernetes_pod_label_app]
+              action: keep
+              regex: node-exporter
+            - source_labels: [__meta_kubernetes_pod_node_name]
+              action: replace
+              target_label: node
+            - source_labels: [__meta_kubernetes_pod_host_ip]
+              action: replace
+              target_label: __address__
+              regex: (.+)
+              replacement: $1:9100
+    dest: /etc/prometheus/prometheus.yml
+    owner: prometheus
+    group: prometheus
+    mode: '0644'
+
+- name: Create Prometheus alerting rules
+  ansible.builtin.copy:
+    content: |
+      groups:
+      - name: kubernetes.rules
+        interval: 30s
+        rules:
+        - alert: KubernetesNodeNotReady
+          expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+          for: 30s
+          labels:
+            severity: critical
+          annotations:
+            summary: "Node {{ "{{" }} $labels.node {{ "}}" }} not ready"
+            description: "Node {{ "{{" }} $labels.node {{ "}}" }} has been unready for a long time"
+
+        - alert: KubernetesMemoryPressure
+          expr: kube_node_status_condition{condition="MemoryPressure",status="true"} == 1
+          for: 30s
+          labels:
+            severity: warning
+          annotations:
+            summary: "Node {{ "{{" }} $labels.node {{ "}}" }} memory pressure"
+            description: "Node {{ "{{" }} $labels.node {{ "}}" }} has MemoryPressure condition"
+
+        - alert: KubernetesDiskPressure
+          expr: kube_node_status_condition{condition="DiskPressure",status="true"} == 1
+          for: 30s
+          labels:
+            severity: warning
+          annotations:
+            summary: "Node {{ "{{" }} $labels.node {{ "}}" }} disk pressure"
+            description: "Node {{ "{{" }} $labels.node {{ "}}" }} has DiskPressure condition"
+
+        - alert: KubernetesPodCrashLooping
+          expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
+          for: 30s
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod {{ "{{" }} $labels.namespace {{ "}}" }}/{{ "{{" }} $labels.pod {{ "}}" }} is crash looping"
+            description: "Pod {{ "{{" }} $labels.namespace {{ "}}" }}/{{ "{{" }} $labels.pod {{ "}}" }} has restarted {{ "{{" }} $value {{ "}}" }} times in the last 15 minutes"
+
+        - alert: KubernetesNodeHighCPU
+          expr: (100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 80
+          for: 30s
+          labels:
+            severity: warning
+          annotations:
+            summary: "Node {{ "{{" }} $labels.instance {{ "}}" }} high CPU usage"
+            description: "Node {{ "{{" }} $labels.instance {{ "}}" }} has CPU usage above 80% for more than 30 seconds"
+
+        - alert: KubernetesNodeHighMemory
+          expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+          for: 30s
+          labels:
+            severity: warning
+          annotations:
+            summary: "Node {{ "{{" }} $labels.instance {{ "}}" }} high memory usage"
+            description: "Node {{ "{{" }} $labels.instance {{ "}}" }} has memory usage above 85% for more than 30 seconds"
+    dest: /etc/prometheus/rules.yml
+    owner: prometheus
+    group: prometheus
+    mode: '0644'
+
+- name: Create Prometheus systemd service
+  ansible.builtin.copy:
+    content: |
+      [Unit]
+      Description=Prometheus
+      Wants=network-online.target
+      After=network-online.target
+
+      [Service]
+      User=prometheus
+      Group=prometheus
+      Type=simple
+      ExecStart=/usr/local/bin/prometheus \
+        --config.file=/etc/prometheus/prometheus.yml \
+        --storage.tsdb.path=/var/lib/prometheus/ \
+        --web.console.templates=/etc/prometheus/consoles \
+        --web.console.libraries=/etc/prometheus/console_libraries \
+        --web.listen-address=0.0.0.0:9090 \
+        --web.enable-lifecycle \
+        --web.enable-admin-api
+
+      Restart=always
+      RestartSec=10s
+
+      [Install]
+      WantedBy=multi-user.target
+    dest: /etc/systemd/system/prometheus.service
+    mode: '0644'
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: yes
+
+- name: Enable and start Prometheus
+  ansible.builtin.systemd:
+    name: prometheus
+    state: started
+    enabled: yes
+
+- name: Restart Prometheus to reload configuration
+  ansible.builtin.systemd:
+    name: prometheus
+    state: restarted
+
+- name: Wait for Prometheus to be ready
+  ansible.builtin.wait_for:
+    port: 9090
+    delay: 5
+    timeout: 60
+
+- name: Display Prometheus access info
+  ansible.builtin.debug:
+    msg: |
+      Prometheus is now running on monitoring server!
+      Access URL: http://{{ ansible_default_ipv4.address }}:9090
+      Provider Network Access: http://{{ hostvars[inventory_hostname].ansible_host }}:9090
+

@@ -1,0 +1,8 @@
+---
+- name: Install Grafana on Monitoring Server
+  hosts: monitors
+  become: yes
+  roles:
+    - role: hexaweb
+      hexaweb_tasks_from: 09-grafana.yml
+

@@ -1,0 +1,13 @@
+---
+# Dispatcher entrypoint for the hexaweb role.
+# Each playbook sets `hexaweb_tasks_from` to select which tasks file to run.
+- name: Validate hexaweb_tasks_from is set
+  ansible.builtin.assert:
+    that:
+      - hexaweb_tasks_from is defined
+      - hexaweb_tasks_from | length > 0
+    fail_msg: "You must set `hexaweb_tasks_from` (e.g. 01-common.yml) when using role hexaweb."
+
+- name: Run selected hexaweb task set
+  ansible.builtin.include_tasks: "{{ hexaweb_tasks_from }}"
+

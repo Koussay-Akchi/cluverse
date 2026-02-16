@@ -1,0 +1,124 @@
+---
+- name: Check if initialized
+  ansible.builtin.stat:
+    path: /etc/kubernetes/admin.conf
+  register: kubeadm_init
+
+- name: Wait for containerd before kubeadm init
+  ansible.builtin.wait_for:
+    path: /run/containerd/containerd.sock
+    timeout: 60
+  when: not kubeadm_init.stat.exists
+
+- name: Ensure containerd is running before init
+  ansible.builtin.systemd:
+    name: containerd
+    state: started
+    enabled: yes
+  when: not kubeadm_init.stat.exists
+
+- name: Initialize cluster
+  ansible.builtin.command: |
+    kubeadm init \
+    --apiserver-advertise-address={{ master_private_ip }} \
+    --pod-network-cidr={{ pod_network_cidr }} \
+    --kubernetes-version=v{{ kubernetes_version }}
+  environment:
+    PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+  when: not kubeadm_init.stat.exists
+
+- name: Restart kubelet to pick up control plane manifests
+  ansible.builtin.systemd:
+    name: kubelet
+    state: restarted
+  when: not kubeadm_init.stat.exists
+
+- name: Wait for API server to listen
+  ansible.builtin.wait_for:
+    port: 6443
+    host: "127.0.0.1"
+    delay: 10
+    timeout: 120
+    state: started
+  when: not kubeadm_init.stat.exists
+
+- name: Wait for API server to be ready (kubectl)
+  ansible.builtin.shell: kubectl get nodes --request-timeout=10s --kubeconfig=/etc/kubernetes/admin.conf
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: api_ready
+  until: api_ready.rc == 0
+  retries: 24
+  delay: 5
+  when: not kubeadm_init.stat.exists
+
+- name: Check if API server is reachable (recovery path)
+  ansible.builtin.shell: kubectl get nodes --request-timeout=5s --kubeconfig=/etc/kubernetes/admin.conf
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: api_reachable
+  ignore_errors: yes
+  when: kubeadm_init.stat.exists
+
+- name: Restart kubelet when API is down (recovery)
+  ansible.builtin.systemd:
+    name: kubelet
+    state: restarted
+  when: kubeadm_init.stat.exists and api_reachable.rc != 0
+
+- name: Wait for API server after kubelet restart (recovery)
+  ansible.builtin.wait_for:
+    port: 6443
+    host: "127.0.0.1"
+    delay: 5
+    timeout: 90
+    state: started
+  when: kubeadm_init.stat.exists and api_reachable.rc != 0
+
+- name: Ensure API responds after recovery
+  ansible.builtin.shell: kubectl get nodes --request-timeout=10s --kubeconfig=/etc/kubernetes/admin.conf
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: api_after_recovery
+  until: api_after_recovery.rc == 0
+  retries: 18
+  delay: 5
+  when: kubeadm_init.stat.exists and api_reachable.rc != 0
+
+- name: Create .kube directory
+  ansible.builtin.file:
+    path: /root/.kube
+    state: directory
+    mode: '0700'
+
+- name: Copy admin.conf to root
+  ansible.builtin.copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /root/.kube/config
+    remote_src: yes
+    mode: '0600'
+
+- name: Install Flannel CNI
+  ansible.builtin.shell: |
+    kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  retries: 5
+  delay: 10
+  register: flannel_result
+  until: flannel_result is not failed
+
+- name: Get join command
+  ansible.builtin.command: kubeadm token create --print-join-command
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: join_command
+
+- name: Save join command
+  ansible.builtin.copy:
+    content: "{{ join_command.stdout }}"
+    dest: /tmp/kubeadm_join.sh
+    mode: '0755'
+  delegate_to: localhost
+  become: no
+

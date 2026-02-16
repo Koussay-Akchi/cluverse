@@ -1,0 +1,10 @@
+---
+- name: Initialize master
+  hosts: masters
+  become: yes
+  vars:
+    master_private_ip: "{{ ansible_facts['default_ipv4']['address'] }}"
+  roles:
+    - role: hexaweb
+      hexaweb_tasks_from: 04-masters.yml
+
