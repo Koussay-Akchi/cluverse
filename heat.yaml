@@ -299,6 +299,46 @@ resources:
         - get_resource: internal_communication_security_group
         - get_resource: kubernetes_security_group
 
+  internal_port_3:
+    type: OS::Neutron::Port
+    properties:
+      name:
+        list_join:
+          - '-'
+          - - { get_param: 'OS::stack_name' }
+            - 'port-3'
+      network_id:
+        get_resource: internal_net
+      fixed_ips:
+        - subnet_id:
+            get_resource: internal_subnet
+          ip_address: 10.8.1.12
+      security_groups:
+        - get_resource: stack_base_security_group
+        - get_resource: datastack_base_security_group
+        - get_resource: internal_communication_security_group
+        - get_resource: kubernetes_security_group
+
+  internal_port_4:
+    type: OS::Neutron::Port
+    properties:
+      name:
+        list_join:
+          - '-'
+          - - { get_param: 'OS::stack_name' }
+            - 'port-4'
+      network_id:
+        get_resource: internal_net
+      fixed_ips:
+        - subnet_id:
+            get_resource: internal_subnet
+          ip_address: 10.8.1.13
+      security_groups:
+        - get_resource: stack_base_security_group
+        - get_resource: datastack_base_security_group
+        - get_resource: internal_communication_security_group
+        - get_resource: kubernetes_security_group
+
   internal_port_5:
     type: OS::Neutron::Port
     properties:
@@ -325,6 +365,18 @@ resources:
         get_param: floating_network_ip
 
   floating_ip_2:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network_id:
+        get_param: floating_network_ip
+
+  floating_ip_3:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network_id:
+        get_param: floating_network_ip
+
+  floating_ip_4:
     type: OS::Neutron::FloatingIP
     properties:
       floating_network_id:
@@ -357,6 +409,28 @@ resources:
         get_resource: floating_ip_2
       port_id:
         get_resource: internal_port_2
+
+  floating_ip_association_3:
+    type: OS::Neutron::FloatingIPAssociation
+    depends_on:
+      - internal_interface
+      - internal_port_3
+    properties:
+      floatingip_id:
+        get_resource: floating_ip_3
+      port_id:
+        get_resource: internal_port_3
+
+  floating_ip_association_4:
+    type: OS::Neutron::FloatingIPAssociation
+    depends_on:
+      - internal_interface
+      - internal_port_4
+    properties:
+      floatingip_id:
+        get_resource: floating_ip_4
+      port_id:
+        get_resource: internal_port_4
 
   floating_ip_association_5:
     type: OS::Neutron::FloatingIPAssociation
@@ -409,6 +483,46 @@ resources:
       metadata:
         group: workers
 
+  demo_instance_3:
+    type: OS::Nova::Server
+    properties:
+      flavor:
+        get_param: flavor_id
+      image:
+        get_param: image_id
+      key_name:
+        get_param: key_name
+      name:
+        list_join:
+          - '-'
+          - - { get_param: 'OS::stack_name' }
+            - 'kube-worker-2'
+      networks:
+        - port:
+            get_resource: internal_port_3
+      metadata:
+        group: workers
+
+  demo_instance_4:
+    type: OS::Nova::Server
+    properties:
+      flavor:
+        get_param: flavor_id
+      image:
+        get_param: image_id
+      key_name:
+        get_param: key_name
+      name:
+        list_join:
+          - '-'
+          - - { get_param: 'OS::stack_name' }
+            - 'kube-worker-3'
+      networks:
+        - port:
+            get_resource: internal_port_4
+      metadata:
+        group: workers
+
   demo_instance_5:
     type: OS::Nova::Server
     properties:
@@ -436,6 +550,12 @@ outputs:
   kube_worker_1_floating_ip:
     value:
       get_attr: [floating_ip_2, floating_ip_address]
+  kube_worker_2_floating_ip:
+    value:
+      get_attr: [floating_ip_3, floating_ip_address]
+  kube_worker_3_floating_ip:
+    value:
+      get_attr: [floating_ip_4, floating_ip_address]
   kube_monitoring_floating_ip:
     value:
       get_attr: [floating_ip_5, floating_ip_address]
@@ -445,6 +565,12 @@ outputs:
   kube_worker_1_private_ip:
     value:
       get_attr: [internal_port_2, fixed_ips, 0, ip_address]
+  kube_worker_2_private_ip:
+    value:
+      get_attr: [internal_port_3, fixed_ips, 0, ip_address]
+  kube_worker_3_private_ip:
+    value:
+      get_attr: [internal_port_4, fixed_ips, 0, ip_address]
   kube_monitoring_private_ip:
     value:
       get_attr: [internal_port_5, fixed_ips, 0, ip_address]
