@@ -40,15 +40,15 @@
     - alertmanager
     - amtool
 
-- name: Create Alertmanager configuration (from group_vars/monitoring.yml)
+- name: Create Alertmanager configuration
   ansible.builtin.copy:
     content: |
       global:
         resolve_timeout: 5m
-        smtp_smarthost: {{ alertmanager_smtp_server | quote }}
-        smtp_from: {{ alertmanager_smtp_from | quote }}
-        smtp_auth_username: {{ alertmanager_smtp_username | quote }}
-        smtp_auth_password: {{ (alertmanager_smtp_password | default('')) | regex_replace('\s+', '') | quote }}
+        smtp_smarthost: smtp.gmail.com:587
+        smtp_from: contact.hexaflow@gmail.com
+        smtp_auth_username: contact.hexaflow@gmail.com
+        smtp_auth_password: skianczv dqepzejw
         smtp_require_tls: true
 
       route:
@@ -71,11 +71,11 @@
       receivers:
       - name: 'email-receiver'
         email_configs:
-        - to: {{ alertmanager_smtp_to | quote }}
-          from: {{ alertmanager_smtp_from | quote }}
-          smarthost: {{ alertmanager_smtp_server | quote }}
-          auth_username: {{ alertmanager_smtp_username | quote }}
-          auth_password: {{ (alertmanager_smtp_password | default('')) | regex_replace('\s+', '') | quote }}
+        - to: contact.hexaflow@gmail.com
+          from: contact.hexaflow@gmail.com
+          smarthost: smtp.gmail.com:587
+          auth_username: contact.hexaflow@gmail.com
+          auth_password: skianczv dqepzejw
           require_tls: true
           headers:
             Subject: '[Kubernetes] Alert: {{ "{{" }} .GroupLabels.alertname {{ "}}" }}'
@@ -107,22 +107,22 @@
 
       - name: 'email-critical'
         email_configs:
-        - to: {{ alertmanager_smtp_to | quote }}
-          from: {{ alertmanager_smtp_from | quote }}
-          smarthost: {{ alertmanager_smtp_server | quote }}
-          auth_username: {{ alertmanager_smtp_username | quote }}
-          auth_password: {{ (alertmanager_smtp_password | default('')) | regex_replace('\s+', '') | quote }}
+        - to: contact.hexaflow@gmail.com
+          from: contact.hexaflow@gmail.com
+          smarthost: smtp.gmail.com:587
+          auth_username: contact.hexaflow@gmail.com
+          auth_password: skianczv dqepzejw
           require_tls: true
           headers:
             Subject: '[CRITICAL] {{ "{{" }} .GroupLabels.alertname {{ "}}" }} - IMMEDIATE ACTION REQUIRED'
 
       - name: 'email-warning'
         email_configs:
-        - to: {{ alertmanager_smtp_to | quote }}
-          from: {{ alertmanager_smtp_from | quote }}
-          smarthost: {{ alertmanager_smtp_server | quote }}
-          auth_username: {{ alertmanager_smtp_username | quote }}
-          auth_password: {{ (alertmanager_smtp_password | default('')) | regex_replace('\s+', '') | quote }}
+        - to: contact.hexaflow@gmail.com
+          from: contact.hexaflow@gmail.com
+          smarthost: smtp.gmail.com:587
+          auth_username: contact.hexaflow@gmail.com
+          auth_password: skianczv dqepzejw
           require_tls: true
           headers:
             Subject: '[WARNING] {{ "{{" }} .GroupLabels.alertname {{ "}}" }}'
@@ -201,7 +201,11 @@
       - Email notifications configured
       - Alert routing configured
       
+      SMTP Configuration:
+      - Server: smtp.gmail.com:587
+      - From: contact.hexaflow@gmail.com
+      - To: contact.hexaflow@gmail.com
+      
       To update SMTP settings, edit /etc/alertmanager/alertmanager.yml
       and restart: systemctl restart alertmanager
       ================================================
-

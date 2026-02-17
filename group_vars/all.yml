@@ -1,4 +1,4 @@
 kubernetes_version: "1.35.1"
 pod_network_cidr: "10.244.0.0/16"
 ansible_user: "ubuntu"
-ansible_ssh_private_key_file: "~/.ssh/id_rsa"
+ansible_ssh_private_key_file: "~/.ssh/id_ed25519"
