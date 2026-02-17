@@ -3,6 +3,6 @@
   hosts: monitors
   become: yes
   roles:
-    - role: hexaweb
-      hexaweb_tasks_from: 08-alertmanager.yml
+    - role: monitoring
+      monitoring_tasks_from: 08-alertmanager.yml
 

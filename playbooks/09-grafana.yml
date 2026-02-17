@@ -3,6 +3,6 @@
   hosts: monitors
   become: yes
   roles:
-    - role: hexaweb
-      hexaweb_tasks_from: 09-grafana.yml
+    - role: monitoring
+      monitoring_tasks_from: 09-grafana.yml
 

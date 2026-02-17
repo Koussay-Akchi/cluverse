@@ -209,3 +209,4 @@
       To update SMTP settings, edit /etc/alertmanager/alertmanager.yml
       and restart: systemctl restart alertmanager
       ================================================
+

@@ -1,0 +1,13 @@
+---
+# Dispatcher entrypoint for the monitoring role.
+# Each playbook sets `monitoring_tasks_from` to select which tasks file to run.
+- name: Validate monitoring_tasks_from is set
+  ansible.builtin.assert:
+    that:
+      - monitoring_tasks_from is defined
+      - monitoring_tasks_from | length > 0
+    fail_msg: "You must set `monitoring_tasks_from` (e.g. 07-prometheus-monitors.yml) when using role monitoring."
+
+- name: Run selected monitoring task set
+  ansible.builtin.include_tasks: "{{ monitoring_tasks_from }}"
+

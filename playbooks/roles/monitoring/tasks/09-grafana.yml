@@ -755,4 +755,3 @@
       Alertmanager:  http://{{ "{{" }} hostvars[inventory_hostname].ansible_host {{ "}}" }}:9093
       ================================================
 
-
