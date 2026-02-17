@@ -1,0 +1,21 @@
+plugin: openstack.cloud.openstack
+clouds:
+  - openstack
+expand_hostvars: yes
+fail_on_errors: no
+all_projects: no
+inventory_hostname: name
+compose:
+  ansible_host: |
+    openstack.addresses.values() | 
+    map('selectattr', 'OS-EXT-IPS:type', 'equalto', 'floating') | 
+    flatten | 
+    map(attribute='addr') | 
+    first | 
+    default(openstack.access_ipv4, true) |
+    default(openstack.private_v4, true)
+groups:
+  masters: "'masters' in (openstack.metadata.group | default(''))"
+  workers: "'workers' in (openstack.metadata.group | default(''))"
+  monitors: "'monitors' in (openstack.metadata.group | default(''))"
+  k8s_cluster: "'masters' in (openstack.metadata.group | default('')) or 'workers' in (openstack.metadata.group | default(''))"
