@@ -1,0 +1,369 @@
+---
+- name: Wait for API server to be ready
+  ansible.builtin.wait_for:
+    port: 6443
+    host: "127.0.0.1"
+    delay: 5
+    timeout: 120
+    state: started
+  run_once: true
+  delegate_to: "{{ api_master }}"
+
+- name: Ensure kubectl can reach API server
+  ansible.builtin.shell: kubectl get nodes --request-timeout=10s --kubeconfig=/etc/kubernetes/admin.conf
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: api_ready
+  until: api_ready.rc == 0
+  retries: 24
+  delay: 5
+  run_once: true
+  delegate_to: "{{ api_master }}"
+
+- name: Create kube-system namespace if not exists
+  ansible.builtin.shell: kubectl create namespace kube-system --kubeconfig=/etc/kubernetes/admin.conf
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  ignore_errors: yes
+  run_once: true
+  delegate_to: "{{ api_master }}"
+
+- name: Create ServiceAccount for Prometheus
+  ansible.builtin.shell: |
+    cat <<EOF | kubectl apply -f -
+    apiVersion: v1
+    kind: ServiceAccount
+    metadata:
+      name: prometheus
+      namespace: kube-system
+    ---
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRole
+    metadata:
+      name: prometheus
+    rules:
+    - apiGroups: [""]
+      resources:
+      - nodes
+      - nodes/proxy
+      - nodes/metrics
+      - services
+      - endpoints
+      - pods
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["extensions", "networking.k8s.io"]
+      resources:
+      - ingresses
+      verbs: ["get", "list", "watch"]
+    - nonResourceURLs:
+      - /metrics
+      - /metrics/cadvisor
+      verbs: ["get"]
+    ---
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRoleBinding
+    metadata:
+      name: prometheus
+    roleRef:
+      apiGroup: rbac.authorization.k8s.io
+      kind: ClusterRole
+      name: prometheus
+    subjects:
+    - kind: ServiceAccount
+      name: prometheus
+      namespace: kube-system
+    EOF
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  run_once: true
+  delegate_to: "{{ api_master }}"
+
+- name: Create token secret for Prometheus
+  ansible.builtin.shell: |
+    cat <<EOF | kubectl apply -f -
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: prometheus-token
+      namespace: kube-system
+      annotations:
+        kubernetes.io/service-account.name: prometheus
+    type: kubernetes.io/service-account-token
+    EOF
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  run_once: true
+  delegate_to: "{{ api_master }}"
+
+- name: Wait for token to be generated
+  ansible.builtin.shell: kubectl get secret prometheus-token -n kube-system -o jsonpath='{.data.token}' --kubeconfig=/etc/kubernetes/admin.conf
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: token_check
+  until: token_check.stdout != ""
+  retries: 10
+  delay: 2
+  run_once: true
+  delegate_to: "{{ api_master }}"
+
+- name: Get Prometheus token
+  ansible.builtin.shell: kubectl get secret prometheus-token -n kube-system -o jsonpath='{.data.token}' --kubeconfig=/etc/kubernetes/admin.conf | base64 -d
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: prometheus_token
+  run_once: true
+  delegate_to: "{{ api_master }}"
+
+- name: Deploy node-exporter DaemonSet
+  ansible.builtin.shell: |
+    cat <<EOF | kubectl apply -f -
+    apiVersion: apps/v1
+    kind: DaemonSet
+    metadata:
+      name: node-exporter
+      namespace: kube-system
+      labels:
+        app: node-exporter
+    spec:
+      selector:
+        matchLabels:
+          app: node-exporter
+      template:
+        metadata:
+          labels:
+            app: node-exporter
+          annotations:
+            prometheus.io/scrape: 'true'
+            prometheus.io/port: '9100'
+        spec:
+          hostNetwork: true
+          hostPID: true
+          tolerations:
+          - key: node-role.kubernetes.io/control-plane
+            operator: Exists
+            effect: NoSchedule
+          - key: node-role.kubernetes.io/master
+            operator: Exists
+            effect: NoSchedule
+          containers:
+          - name: node-exporter
+            image: prom/node-exporter:latest
+            args:
+              - '--path.procfs=/host/proc'
+              - '--path.sysfs=/host/sys'
+              - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+            ports:
+            - containerPort: 9100
+              name: metrics
+              hostPort: 9100
+            volumeMounts:
+            - name: proc
+              mountPath: /host/proc
+              readOnly: true
+            - name: sys
+              mountPath: /host/sys
+              readOnly: true
+            - name: rootfs
+              mountPath: /rootfs
+              readOnly: true
+            resources:
+              requests:
+                cpu: 50m
+                memory: 64Mi
+              limits:
+                cpu: 200m
+                memory: 128Mi
+          volumes:
+          - name: proc
+            hostPath:
+              path: /proc
+          - name: sys
+            hostPath:
+              path: /sys
+          - name: rootfs
+            hostPath:
+              path: /
+    EOF
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  run_once: true
+  delegate_to: "{{ api_master }}"
+
+- name: Wait for node-exporter to be ready
+  ansible.builtin.shell: kubectl rollout status daemonset/node-exporter -n kube-system --timeout=120s --kubeconfig=/etc/kubernetes/admin.conf
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  run_once: true
+  delegate_to: "{{ api_master }}"
+
+- name: Delete existing kube-state-metrics service if it exists
+  ansible.builtin.shell: kubectl delete service kube-state-metrics -n kube-system --ignore-not-found=true --kubeconfig=/etc/kubernetes/admin.conf
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  run_once: true
+  delegate_to: "{{ api_master }}"
+
+- name: Deploy kube-state-metrics
+  ansible.builtin.shell: |
+    cat <<EOF | kubectl apply -f -
+    apiVersion: v1
+    kind: ServiceAccount
+    metadata:
+      name: kube-state-metrics
+      namespace: kube-system
+    ---
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRole
+    metadata:
+      name: kube-state-metrics
+    rules:
+    - apiGroups: [""]
+      resources: ["configmaps", "secrets", "nodes", "pods", "services", "resourcequotas", "replicationcontrollers", "limitranges", "persistentvolumeclaims", "persistentvolumes", "namespaces", "endpoints"]
+      verbs: ["list", "watch"]
+    - apiGroups: ["apps"]
+      resources: ["statefulsets", "daemonsets", "deployments", "replicasets"]
+      verbs: ["list", "watch"]
+    - apiGroups: ["batch"]
+      resources: ["jobs", "cronjobs"]
+      verbs: ["list", "watch"]
+    - apiGroups: ["autoscaling"]
+      resources: ["horizontalpodautoscalers"]
+      verbs: ["list", "watch"]
+    - apiGroups: ["policy"]
+      resources: ["poddisruptionbudgets"]
+      verbs: ["list", "watch"]
+    - apiGroups: ["certificates.k8s.io"]
+      resources: ["certificatesigningrequests"]
+      verbs: ["list", "watch"]
+    - apiGroups: ["storage.k8s.io"]
+      resources: ["storageclasses", "volumeattachments"]
+      verbs: ["list", "watch"]
+    - apiGroups: ["admissionregistration.k8s.io"]
+      resources: ["mutatingwebhookconfigurations", "validatingwebhookconfigurations"]
+      verbs: ["list", "watch"]
+    - apiGroups: ["networking.k8s.io"]
+      resources: ["networkpolicies", "ingresses"]
+      verbs: ["list", "watch"]
+    - apiGroups: ["coordination.k8s.io"]
+      resources: ["leases"]
+      verbs: ["list", "watch"]
+    ---
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRoleBinding
+    metadata:
+      name: kube-state-metrics
+    roleRef:
+      apiGroup: rbac.authorization.k8s.io
+      kind: ClusterRole
+      name: kube-state-metrics
+    subjects:
+    - kind: ServiceAccount
+      name: kube-state-metrics
+      namespace: kube-system
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: kube-state-metrics
+      namespace: kube-system
+      labels:
+        app: kube-state-metrics
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: kube-state-metrics
+      template:
+        metadata:
+          labels:
+            app: kube-state-metrics
+        spec:
+          serviceAccountName: kube-state-metrics
+          containers:
+          - name: kube-state-metrics
+            image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.12.0
+            ports:
+            - containerPort: 8080
+              name: http-metrics
+            - containerPort: 8081
+              name: telemetry
+            livenessProbe:
+              httpGet:
+                path: /healthz
+                port: 8080
+              initialDelaySeconds: 5
+              timeoutSeconds: 5
+            readinessProbe:
+              httpGet:
+                path: /
+                port: 8081
+              initialDelaySeconds: 5
+              timeoutSeconds: 5
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 200m
+                memory: 256Mi
+    ---
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: kube-state-metrics
+      namespace: kube-system
+      labels:
+        app: kube-state-metrics
+    spec:
+      type: ClusterIP
+      selector:
+        app: kube-state-metrics
+      ports:
+      - name: http-metrics
+        port: 8080
+        targetPort: http-metrics
+      - name: telemetry
+        port: 8081
+        targetPort: telemetry
+    EOF
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  run_once: true
+  delegate_to: "{{ api_master }}"
+
+- name: Wait for kube-state-metrics to be ready
+  ansible.builtin.shell: kubectl rollout status deployment/kube-state-metrics -n kube-system --timeout=120s --kubeconfig=/etc/kubernetes/admin.conf
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  run_once: true
+  delegate_to: "{{ api_master }}"
+
+- name: Verify all components are running
+  ansible.builtin.shell: |
+    echo "=== Node Exporter ==="
+    kubectl get daemonset node-exporter -n kube-system --kubeconfig=/etc/kubernetes/admin.conf
+    echo ""
+    echo "=== Kube State Metrics ==="
+    kubectl get deployment kube-state-metrics -n kube-system --kubeconfig=/etc/kubernetes/admin.conf
+    echo ""
+    echo "=== All Pods ==="
+    kubectl get pods -n kube-system -l 'app in (node-exporter,kube-state-metrics)' --kubeconfig=/etc/kubernetes/admin.conf
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: component_status
+  run_once: true
+  delegate_to: "{{ api_master }}"
+
+- name: Display component status
+  ansible.builtin.debug:
+    var: component_status.stdout_lines
+  run_once: true
+
+- name: Save token to local file
+  ansible.builtin.copy:
+    content: "{{ hostvars[api_master].prometheus_token.stdout }}"
+    dest: /tmp/k8s-prometheus-token
+  run_once: true
+  delegate_to: localhost
+  become: no
+

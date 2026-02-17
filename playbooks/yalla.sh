@@ -1,38 +1,15 @@
 #!/bin/bash
 set -e
- 
+
 STACK_NAME="k8s-cluster"
 TEMPLATE="/home/feriel/temp.yaml"
 ANSIBLE_PLAYBOOK="/root/k8s-ansible/playbooks/site.yml"
- 
-echo "=== VÉRIFICATION STACK EXISTANTE ==="
- 
-# Vérifier si la stack existe déjà
-if openstack stack show "$STACK_NAME" &>/dev/null; then
-    echo "⚠ Stack '$STACK_NAME' existe déjà"
-    # Récupérer le status
-    STACK_STATUS=$(openstack stack show "$STACK_NAME" -f value -c stack_status)
-    echo "Status actuel: $STACK_STATUS"
-    # Supprimer la stack
-    echo "Suppression de la stack existante..."
-    openstack stack delete "$STACK_NAME" --yes --wait
-    echo "✓ Stack supprimée"
-    # Attendre un peu pour être sûr
-    sleep 5
-else
-    echo "✓ Aucune stack existante avec ce nom"
-fi
- 
-echo -e "\n=== CRÉATION DE LA STACK ==="
-openstack stack create -t "$TEMPLATE" "$STACK_NAME" --wait
- 
-echo "✓ Stack creation complete"
- 
+
 echo -e "\n=== NETTOYAGE CACHE ANSIBLE ==="
 rm -rf /tmp/ansible_inventory_cache/
 rm -rf ~/.ansible/tmp/*
 rm -rf ~/.cache/ansible-compat/*
- 
+
 echo -e "\n=== ATTENTE SSH ==="
 
 # Récupérer UNIQUEMENT les IPs qui commencent par 192
