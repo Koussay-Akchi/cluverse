@@ -34,3 +34,10 @@
 - name: Prophet AI app
   ansible.builtin.import_playbook: 10-ai.yml
 
+- name: Deploy Cluverse Infrastructure
+  ansible.builtin.import_playbook: 11-cluverse-infra.yml
+
+- name: Deploy Cluverse Services
+  ansible.builtin.import_playbook: 12-cluverse-services.yml
+
+

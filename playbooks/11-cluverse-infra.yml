@@ -1,0 +1,7 @@
+---
+- name: Deploy Cluverse infrastructure
+  hosts: masters
+  become: yes
+  roles:
+    - role: hexaweb
+      hexaweb_tasks_from: 11-cluverse-infra.yml

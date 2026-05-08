@@ -1,0 +1,41 @@
+---
+- name: Create k8s-manifests directory on master
+  ansible.builtin.file:
+    path: /root/k8s-manifests
+    state: directory
+    mode: '0755'
+
+- name: Copy all K8s manifests to master
+  ansible.builtin.copy:
+    src: "../../../../k8s/"
+    dest: /root/k8s-manifests/
+    mode: '0644'
+
+- name: Apply namespace
+  ansible.builtin.shell: kubectl apply -f /root/k8s-manifests/namespace.yml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Apply configmap
+  ansible.builtin.shell: kubectl apply -f /root/k8s-manifests/configmap.yml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Apply secrets
+  ansible.builtin.shell: kubectl apply -f /root/k8s-manifests/secrets.yml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Deploy MySQL
+  ansible.builtin.shell: kubectl apply -f /root/k8s-manifests/mysql.yml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Wait for MySQL to be ready
+  ansible.builtin.shell: kubectl -n cluverse wait --for=condition=ready pod -l app=mysql --timeout=180s
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  retries: 3
+  delay: 10
+  register: mysql_ready
+  until: mysql_ready.rc == 0
