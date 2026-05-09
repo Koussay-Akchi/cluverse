@@ -4,4 +4,4 @@
   become: yes
   roles:
     - role: hexaweb
-      hexaweb_tasks_from: 12-cluverse-services.yml
+      hexaweb_tasks_from: tasks-12-cluverse-services.yml
