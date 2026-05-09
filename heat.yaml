@@ -466,6 +466,7 @@ resources:
   demo_instance_2:
     type: OS::Nova::Server
     properties:
+      availability_zone: "nova:compute-ibtissem"
       flavor:
         get_param: flavor_id
       image:
@@ -486,6 +487,7 @@ resources:
   demo_instance_3:
     type: OS::Nova::Server
     properties:
+      availability_zone: "nova:compute-ibtissem"
       flavor:
         get_param: flavor_id
       image:
@@ -506,6 +508,7 @@ resources:
   demo_instance_4:
     type: OS::Nova::Server
     properties:
+      availability_zone: "nova:compyteNode-Louay"
       flavor:
         get_param: flavor_id
       image:
