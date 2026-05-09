@@ -16,6 +16,7 @@ spec:
       containers:
         - name: speech-analyzer
           image: akchikoussay/speech-analyzer:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8001
           envFrom:

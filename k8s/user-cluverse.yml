@@ -16,6 +16,7 @@ spec:
       containers:
         - name: user-cluverse
           image: akchikoussay/user-cluverse:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
           envFrom:

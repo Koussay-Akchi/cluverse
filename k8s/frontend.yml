@@ -16,6 +16,7 @@ spec:
       containers:
         - name: frontend
           image: akchikoussay/frontend-cluverse:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 80
           readinessProbe:

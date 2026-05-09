@@ -1,4 +1,4 @@
-﻿apiVersion: apps/v1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: competencies-cluverse
@@ -16,6 +16,7 @@ spec:
       containers:
         - name: competencies-cluverse
           image: akchikoussay/competencies-cluverse:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
           envFrom:

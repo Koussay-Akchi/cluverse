@@ -16,6 +16,7 @@ spec:
       containers:
         - name: api-gateway
           image: akchikoussay/api-gateway:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
           envFrom:

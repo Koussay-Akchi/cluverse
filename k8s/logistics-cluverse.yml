@@ -1,4 +1,4 @@
-﻿apiVersion: apps/v1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: logistics-cluverse
@@ -16,6 +16,7 @@ spec:
       containers:
         - name: logistics-cluverse
           image: akchikoussay/logistics-cluverse:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
           envFrom:

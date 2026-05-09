@@ -1,4 +1,4 @@
-﻿apiVersion: apps/v1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: events-cluverse
@@ -16,6 +16,7 @@ spec:
       containers:
         - name: events-cluverse
           image: akchikoussay/events-cluverse:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
           envFrom:

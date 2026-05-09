@@ -1,4 +1,4 @@
-﻿apiVersion: apps/v1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: sponsors-cluverse
@@ -16,6 +16,7 @@ spec:
       containers:
         - name: sponsors-cluverse
           image: akchikoussay/sponsors-cluverse:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
           envFrom:

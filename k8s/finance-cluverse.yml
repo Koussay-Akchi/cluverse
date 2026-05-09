@@ -1,4 +1,4 @@
-﻿apiVersion: apps/v1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: finance-cluverse
@@ -16,6 +16,7 @@ spec:
       containers:
         - name: finance-cluverse
           image: akchikoussay/finance-cluverse:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
           envFrom:

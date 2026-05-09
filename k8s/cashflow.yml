@@ -72,6 +72,7 @@ spec:
       containers:
         - name: cashflow-service
           image: akchikoussay/cashflow-forecast-service:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8090
           envFrom:

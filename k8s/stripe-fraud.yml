@@ -16,6 +16,7 @@ spec:
       containers:
         - name: stripe-fraud
           image: akchikoussay/stripe-fraud-detection:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8092
           envFrom:
