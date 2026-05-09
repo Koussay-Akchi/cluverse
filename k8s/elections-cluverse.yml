@@ -4,7 +4,7 @@ metadata:
   name: elections-cluverse
   namespace: cluverse
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: elections-cluverse

@@ -4,7 +4,7 @@ metadata:
   name: sponsors-cluverse
   namespace: cluverse
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: sponsors-cluverse
