@@ -31,8 +31,6 @@
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
   loop:
-    - bio-generator
-    - speech-analyzer
     - cashflow
     - stripe-fraud
 
