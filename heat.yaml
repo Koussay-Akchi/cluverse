@@ -446,7 +446,7 @@ resources:
   demo_instance_1:
     type: OS::Nova::Server
     properties:
-      availability_zone: "nova:ComputeNodeLouay"
+      availability_zone: "nova:ComputeNode-Louay"
       flavor:
         get_param: flavor_id
       image:
@@ -509,7 +509,7 @@ resources:
   demo_instance_4:
     type: OS::Nova::Server
     properties:
-      availability_zone: "nova:ComputeNodeLouay"
+      availability_zone: "nova:ComputeNode-Louay"
       flavor:
         get_param: flavor_id
       image:
@@ -530,7 +530,7 @@ resources:
   demo_instance_5:
     type: OS::Nova::Server
     properties:
-      availability_zone: "nova:ComputeNodeLouay"
+      availability_zone: "nova:ComputeNode-Louay"
       flavor:
         get_param: flavor_id
       image:
