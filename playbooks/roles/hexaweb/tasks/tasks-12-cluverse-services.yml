@@ -1,0 +1,64 @@
+---
+- name: Deploy Eureka Server
+  ansible.builtin.shell: kubectl apply -f /root/k8s-manifests/eureka-server.yml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Wait for Eureka Server to be ready
+  ansible.builtin.shell: kubectl -n cluverse wait --for=condition=ready pod -l app=eureka-server --timeout=180s
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  retries: 3
+  delay: 10
+  register: eureka_ready
+  until: eureka_ready.rc == 0
+
+- name: Deploy all Spring Boot microservices
+  ansible.builtin.shell: "kubectl apply -f /root/k8s-manifests/{{ item }}.yml"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  loop:
+    - user-cluverse
+    - elections-cluverse
+    - events-cluverse
+    - competencies-cluverse
+    - logistics-cluverse
+    - finance-cluverse
+    - sponsors-cluverse
+
+- name: Deploy non-Spring services
+  ansible.builtin.shell: "kubectl apply -f /root/k8s-manifests/{{ item }}.yml"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  loop:
+    - cashflow
+    - stripe-fraud
+
+- name: Deploy API Gateway
+  ansible.builtin.shell: kubectl apply -f /root/k8s-manifests/api-gateway.yml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Deploy Frontend
+  ansible.builtin.shell: kubectl apply -f /root/k8s-manifests/frontend.yml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Wait for API Gateway to be ready
+  ansible.builtin.shell: kubectl -n cluverse wait --for=condition=ready pod -l app=api-gateway --timeout=180s
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  retries: 3
+  delay: 10
+  register: gateway_ready
+  until: gateway_ready.rc == 0
+
+- name: Verify all pods are running
+  ansible.builtin.shell: kubectl -n cluverse get pods -o wide
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: pod_status
+
+- name: Show pod status
+  ansible.builtin.debug:
+    var: pod_status.stdout_lines
