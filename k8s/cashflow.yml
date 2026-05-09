@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cashflow-ai-engine
+  namespace: cluverse
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cashflow-ai-engine
+  template:
+    metadata:
+      labels:
+        app: cashflow-ai-engine
+    spec:
+      containers:
+        - name: cashflow-ai-engine
+          image: akchikoussay/cashflow-ai-engine:latest
+          ports:
+            - containerPort: 8091
+          env:
+            - name: AI_ENGINE_PORT
+              value: "8091"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8091
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8091
+            initialDelaySeconds: 60
+            periodSeconds: 15
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "300m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cashflow-ai-engine
+  namespace: cluverse
+spec:
+  selector:
+    app: cashflow-ai-engine
+  ports:
+    - port: 8091
+      targetPort: 8091
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cashflow-service
+  namespace: cluverse
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cashflow-service
+  template:
+    metadata:
+      labels:
+        app: cashflow-service
+    spec:
+      containers:
+        - name: cashflow-service
+          image: akchikoussay/cashflow-forecast-service:latest
+          ports:
+            - containerPort: 8090
+          envFrom:
+            - secretRef:
+                name: cluverse-secrets
+          env:
+            - name: PORT
+              value: "8090"
+            - name: AI_ENGINE_URL
+              value: http://cashflow-ai-engine.cluverse.svc.cluster.local:8091
+            - name: CORS_ORIGIN
+              value: "*"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8090
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8090
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "300m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cashflow-service
+  namespace: cluverse
+spec:
+  selector:
+    app: cashflow-service
+  ports:
+    - port: 8090
+      targetPort: 8090
+  type: ClusterIP

@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bio-generator
+  namespace: cluverse
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bio-generator
+  template:
+    metadata:
+      labels:
+        app: bio-generator
+    spec:
+      containers:
+        - name: bio-generator
+          image: akchikoussay/bio-generator:latest
+          ports:
+            - containerPort: 8093
+          envFrom:
+            - secretRef:
+                name: cluverse-secrets
+          env:
+            - name: PORT
+              value: "8093"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8093
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8093
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bio-generator
+  namespace: cluverse
+spec:
+  selector:
+    app: bio-generator
+  ports:
+    - port: 8093
+      targetPort: 8093
+  type: ClusterIP

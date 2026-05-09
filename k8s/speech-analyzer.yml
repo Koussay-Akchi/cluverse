@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: speech-analyzer
+  namespace: cluverse
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: speech-analyzer
+  template:
+    metadata:
+      labels:
+        app: speech-analyzer
+    spec:
+      containers:
+        - name: speech-analyzer
+          image: akchikoussay/speech-analyzer:latest
+          ports:
+            - containerPort: 8001
+          envFrom:
+            - secretRef:
+                name: cluverse-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "300m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: speech-analyzer
+  namespace: cluverse
+spec:
+  selector:
+    app: speech-analyzer
+  ports:
+    - port: 8001
+      targetPort: 8001
+  type: ClusterIP

@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stripe-fraud
+  namespace: cluverse
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stripe-fraud
+  template:
+    metadata:
+      labels:
+        app: stripe-fraud
+    spec:
+      containers:
+        - name: stripe-fraud
+          image: akchikoussay/stripe-fraud-detection:latest
+          ports:
+            - containerPort: 8092
+          envFrom:
+            - secretRef:
+                name: cluverse-secrets
+          env:
+            - name: PORT
+              value: "8092"
+            - name: CORS_ORIGIN
+              value: "*"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8092
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8092
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "300m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stripe-fraud
+  namespace: cluverse
+spec:
+  selector:
+    app: stripe-fraud
+  ports:
+    - port: 8092
+      targetPort: 8092
+  type: ClusterIP

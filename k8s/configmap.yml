@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluverse-config
+  namespace: cluverse
+data:
+  EUREKA_URL: http://eureka-server.cluverse.svc.cluster.local:8761/eureka/
+  SPRING_DATASOURCE_URL: "jdbc:mysql://mysql.cluverse.svc.cluster.local:3306/cluverse?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true"
+  SPRING_PROFILES_ACTIVE: k8s
+  SERVER_PORT: "8080"
+  BIO_GENERATOR_URL: http://bio-generator.cluverse.svc.cluster.local:8093
+  SPEECH_ANALYZER_URL: http://speech-analyzer.cluverse.svc.cluster.local:8001
+  CASHFLOW_SERVICE_URL: http://cashflow-service.cluverse.svc.cluster.local:8090
+  STRIPE_FRAUD_URL: http://stripe-fraud.cluverse.svc.cluster.local:8092
+  FRONTEND_URL: http://frontend.cluverse.svc.cluster.local
