@@ -9,5 +9,5 @@
     fail_msg: "You must set `hexaweb_tasks_from` (e.g. 01-common.yml) when using role hexaweb."
 
 - name: Run selected hexaweb task set
-  ansible.builtin.include_tasks: "{{ hexaweb_tasks_from }}"
+  ansible.builtin.include_tasks: "{{ role_path }}/tasks/{{ hexaweb_tasks_from }}"
 
