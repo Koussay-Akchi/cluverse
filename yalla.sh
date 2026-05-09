@@ -2,7 +2,7 @@
 set -e
  
 STACK_NAME="k8s-cluster"
-TEMPLATE="/home/feriel/temp.yaml"
+TEMPLATE="/root/k8s-ansible/heat.yaml"
 ANSIBLE_PLAYBOOK="/root/k8s-ansible/playbooks/site.yml"
  
 echo "=== VÉRIFICATION STACK EXISTANTE ==="
