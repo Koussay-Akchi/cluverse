@@ -358,6 +358,26 @@ resources:
         - get_resource: monitoring_security_group
         - get_resource: internal_communication_security_group
 
+  internal_port_6:
+    type: OS::Neutron::Port
+    properties:
+      name:
+        list_join:
+          - '-'
+          - - { get_param: 'OS::stack_name' }
+            - 'port-6'
+      network_id:
+        get_resource: internal_net
+      fixed_ips:
+        - subnet_id:
+            get_resource: internal_subnet
+          ip_address: 10.8.1.15
+      security_groups:
+        - get_resource: stack_base_security_group
+        - get_resource: datastack_base_security_group
+        - get_resource: internal_communication_security_group
+        - get_resource: kubernetes_security_group
+
   floating_ip_1:
     type: OS::Neutron::FloatingIP
     properties:
@@ -383,6 +403,12 @@ resources:
         get_param: floating_network_ip
 
   floating_ip_5:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network_id:
+        get_param: floating_network_ip
+
+  floating_ip_6:
     type: OS::Neutron::FloatingIP
     properties:
       floating_network_id:
@@ -442,6 +468,17 @@ resources:
         get_resource: floating_ip_5
       port_id:
         get_resource: internal_port_5
+
+  floating_ip_association_6:
+    type: OS::Neutron::FloatingIPAssociation
+    depends_on:
+      - internal_interface
+      - internal_port_6
+    properties:
+      floatingip_id:
+        get_resource: floating_ip_6
+      port_id:
+        get_resource: internal_port_6
 
   demo_instance_1:
     type: OS::Nova::Server
@@ -548,6 +585,27 @@ resources:
       metadata:
         group: monitors
 
+  demo_instance_6:
+    type: OS::Nova::Server
+    properties:
+      availability_zone: "nova:compute-ibtissem"
+      flavor:
+        get_param: flavor_id
+      image:
+        get_param: image_id
+      key_name:
+        get_param: key_name
+      name:
+        list_join:
+          - '-'
+          - - { get_param: 'OS::stack_name' }
+            - 'kube-worker-4'
+      networks:
+        - port:
+            get_resource: internal_port_6
+      metadata:
+        group: workers
+
 outputs:
   kube_master_floating_ip:
     value:
@@ -561,6 +619,9 @@ outputs:
   kube_worker_3_floating_ip:
     value:
       get_attr: [floating_ip_4, floating_ip_address]
+  kube_worker_4_floating_ip:
+    value:
+      get_attr: [floating_ip_6, floating_ip_address]
   kube_monitoring_floating_ip:
     value:
       get_attr: [floating_ip_5, floating_ip_address]
@@ -576,6 +637,9 @@ outputs:
   kube_worker_3_private_ip:
     value:
       get_attr: [internal_port_4, fixed_ips, 0, ip_address]
+  kube_worker_4_private_ip:
+    value:
+      get_attr: [internal_port_6, fixed_ips, 0, ip_address]
   kube_monitoring_private_ip:
     value:
       get_attr: [internal_port_5, fixed_ips, 0, ip_address]
