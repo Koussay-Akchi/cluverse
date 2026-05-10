@@ -25,7 +25,17 @@
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
 
+- name: Copy SQL file into MySQL pod
+  ansible.builtin.shell: "kubectl -n cluverse cp /root/cluverse_10_5.sql {{ mysql_pod.stdout }}:/tmp/cluverse_10_5.sql"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
 - name: Import SQL to MySQL Pod
-  ansible.builtin.shell: "kubectl -n cluverse exec -i {{ mysql_pod.stdout }} -- mysql -uroot -pcluverse_root cluverse < /root/cluverse_10_5.sql"
+  ansible.builtin.shell: "kubectl -n cluverse exec {{ mysql_pod.stdout }} -- sh -c 'mysql -uroot -pcluverse_root cluverse < /tmp/cluverse_10_5.sql'"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Clean up temporary SQL file in pod
+  ansible.builtin.shell: "kubectl -n cluverse exec {{ mysql_pod.stdout }} -- rm /tmp/cluverse_10_5.sql"
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
