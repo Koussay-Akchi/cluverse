@@ -33,6 +33,8 @@
   loop:
     - cashflow
     - stripe-fraud
+    - bio-generator
+    - speech-analyzer
 
 - name: Deploy API Gateway
   ansible.builtin.shell: kubectl apply -f /root/k8s-manifests/api-gateway.yml
