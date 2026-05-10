@@ -1,0 +1,7 @@
+---
+- name: Setup ngrok public access
+  hosts: masters
+  become: yes
+  roles:
+    - role: hexaweb
+      hexaweb_tasks_from: tasks-13-ngrok.yml

@@ -43,4 +43,7 @@
 - name: Deploy Cluverse Services
   ansible.builtin.import_playbook: 12-cluverse-services.yml
 
+- name: Setup ngrok public access
+  ansible.builtin.import_playbook: 13-ngrok.yml
+
 

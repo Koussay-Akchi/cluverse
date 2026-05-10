@@ -1,0 +1,40 @@
+---
+- name: Install ngrok GPG key
+  ansible.builtin.shell: curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+
+- name: Add ngrok repository
+  ansible.builtin.shell: echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+
+- name: Update apt and install ngrok
+  ansible.builtin.apt:
+    update_cache: yes
+    name: ngrok
+    state: present
+
+- name: Configure ngrok authtoken
+  ansible.builtin.shell: "ngrok config add-authtoken {{ ngrok_authtoken }}"
+  when: ngrok_authtoken != "REPLACE_WITH_YOUR_NGROK_TOKEN"
+
+- name: Copy Ingress Proxy manifest to master
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../k8s/ingress-proxy.yml"
+    dest: /root/k8s-manifests/ingress-proxy.yml
+    mode: '0644'
+
+- name: Deploy Ingress Proxy to K8s
+  ansible.builtin.shell: kubectl apply -f /root/k8s-manifests/ingress-proxy.yml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Wait for Ingress Proxy to be ready
+  ansible.builtin.shell: kubectl -n cluverse wait --for=condition=ready pod -l app=ingress-proxy --timeout=60s
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Kill existing ngrok processes
+  ansible.builtin.shell: pkill ngrok || true
+
+- name: Start ngrok in background
+  ansible.builtin.shell: "nohup ngrok http 30099 --log=stdout > /root/ngrok.log 2>&1 &"
+  async: 10
+  poll: 0
