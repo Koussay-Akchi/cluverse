@@ -1,0 +1,26 @@
+---
+- name: Copy SQL file to master node
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../cluverse 10-5.sql"
+    dest: /root/cluverse_10_5.sql
+    mode: '0644'
+
+- name: Get MySQL Pod name
+  ansible.builtin.shell: kubectl -n cluverse get pod -l app=mysql -o jsonpath='{.items[0].metadata.name}'
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: mysql_pod
+
+- name: Wait for MySQL to be ready before importing
+  ansible.builtin.shell: kubectl -n cluverse wait --for=condition=ready pod -l app=mysql --timeout=180s
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  retries: 3
+  delay: 10
+  register: mysql_ready
+  until: mysql_ready.rc == 0
+
+- name: Import SQL to MySQL Pod
+  ansible.builtin.shell: "kubectl -n cluverse exec -i {{ mysql_pod.stdout }} -- mysql -uroot -pcluverse_root cluverse < /root/cluverse_10_5.sql"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf

@@ -1,0 +1,7 @@
+---
+- name: Import Cluverse Database
+  hosts: masters
+  become: yes
+  roles:
+    - role: hexaweb
+      hexaweb_tasks_from: tasks-11-5-mysql-import.yml

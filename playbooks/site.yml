@@ -37,6 +37,9 @@
 - name: Deploy Cluverse Infrastructure
   ansible.builtin.import_playbook: 11-cluverse-infra.yml
 
+- name: Import Cluverse Database
+  ansible.builtin.import_playbook: 11-5-mysql-import.yml
+
 - name: Deploy Cluverse Services
   ansible.builtin.import_playbook: 12-cluverse-services.yml
 
