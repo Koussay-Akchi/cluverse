@@ -31,7 +31,7 @@ spec:
             httpGet:
               path: /health
               port: 8091
-            initialDelaySeconds: 60
+            initialDelaySeconds: 200
             periodSeconds: 15
           resources:
             requests:

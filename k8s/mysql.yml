@@ -48,7 +48,7 @@ spec:
           livenessProbe:
             exec:
               command: ["mysqladmin", "ping", "-h", "localhost", "-u", "root", "--silent"]
-            initialDelaySeconds: 60
+            initialDelaySeconds: 200
             periodSeconds: 15
             failureThreshold: 5
           resources:
