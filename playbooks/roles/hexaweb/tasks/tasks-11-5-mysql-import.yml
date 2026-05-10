@@ -20,6 +20,11 @@
   register: mysql_ready
   until: mysql_ready.rc == 0
 
+- name: Create database if not exists
+  ansible.builtin.shell: "kubectl -n cluverse exec -i {{ mysql_pod.stdout }} -- mysql -uroot -pcluverse_root -e 'CREATE DATABASE IF NOT EXISTS cluverse;'"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
 - name: Import SQL to MySQL Pod
   ansible.builtin.shell: "kubectl -n cluverse exec -i {{ mysql_pod.stdout }} -- mysql -uroot -pcluverse_root cluverse < /root/cluverse_10_5.sql"
   environment:
