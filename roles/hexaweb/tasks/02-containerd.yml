@@ -32,12 +32,14 @@
   ansible.builtin.apt:
     update_cache: yes
     cache_valid_time: 0
+    force_apt_get: yes
 
 - name: Install containerd
   ansible.builtin.apt:
     name: containerd.io
     state: present
     update_cache: no
+    force_apt_get: yes
 
 - name: Create containerd config directory
   ansible.builtin.file:

@@ -28,6 +28,7 @@
     repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/{{ k8s_repo_version }}/deb/ /"
     state: present
     filename: kubernetes
+    force_apt_get: yes
 
 - name: Install kubelet kubeadm kubectl
   ansible.builtin.apt:
@@ -37,6 +38,7 @@
       - kubectl
     state: present
     update_cache: yes
+    force_apt_get: yes
 
 - name: Hold kubelet
   ansible.builtin.dpkg_selections:

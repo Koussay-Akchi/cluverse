@@ -10,6 +10,7 @@
     update_cache: yes
     name: ngrok
     state: present
+    force_apt_get: yes
 
 - name: Configure ngrok authtoken
   ansible.builtin.shell: "ngrok config add-authtoken {{ ngrok_authtoken }}"
