@@ -22,6 +22,23 @@
     ip link set dev eth0 mtu 1400 || true
   changed_when: false
 
+- name: Disable IPv6 at kernel level (prevents DNS/Mirror hangs)
+  ansible.posix.sysctl:
+    name: "{{ item }}"
+    value: '1'
+    state: present
+    sysctl_set: yes
+  loop:
+    - net.ipv6.conf.all.disable_ipv6
+    - net.ipv6.conf.default.disable_ipv6
+    - net.ipv6.conf.lo.disable_ipv6
+
+- name: Optimize APT Mirrors (Switch to Global Archive)
+  ansible.builtin.shell: |
+    sed -i 's/http:\/\/.*archive.ubuntu.com/http:\/\/archive.ubuntu.com/g' /etc/apt/sources.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true
+    echo 'Acquire::Queue-Mode "access";' > /etc/apt/apt.conf.d/99parallel
+  changed_when: true
+
 - name: Nuclear clear of apt/dpkg locks and zombies
   ansible.builtin.shell: |
     killall -9 apt apt-get dpkg 2>/dev/null || true
@@ -34,10 +51,10 @@
 
 - name: Update apt cache (Shell version with aggressive timeouts)
   ansible.builtin.shell: |
-    apt-get -o Acquire::ForceIPv4=true -o Acquire::http::Timeout="10" -o Acquire::ftp::Timeout="10" update
+    apt-get update
   register: apt_update_result
-  retries: 3
-  delay: 5
+  retries: 5
+  delay: 10
   until: apt_update_result.rc == 0
 
 - name: Install required packages (Robust version)
