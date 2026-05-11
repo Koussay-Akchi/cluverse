@@ -1,3 +1,11 @@
+- name: Wait for cloud-init to finish
+  ansible.builtin.command: cloud-init status --wait
+  changed_when: false
+
+- name: Random sleep to stagger mirror hits
+  ansible.builtin.pause:
+    seconds: "{{ 5 | random(seed=inventory_hostname) }}"
+
 - name: Stop and disable unattended-upgrades
   ansible.builtin.systemd:
     name: "{{ item }}"
