@@ -49,22 +49,13 @@
   changed_when: false
   ignore_errors: yes
 
-- name: Wait for systemd-resolved to have working DNS (root cause of apt hang)
+- name: Inject DNS config and restart systemd-resolved unconditionally
   ansible.builtin.shell: |
-    for i in $(seq 1 30); do
-      if resolvectl status 2>/dev/null | grep -q "DNS Servers"; then
-        if getent hosts archive.ubuntu.com >/dev/null 2>&1; then
-          exit 0
-        fi
-      fi
-      echo "DNS not ready yet, retry $i/30..."
-      sleep 2
-    done
-    echo "WARNING: DNS never became ready, forcing fallback nameservers"
     mkdir -p /etc/systemd/resolved.conf.d
     printf '[Resolve]\nDNS=8.8.8.8 8.8.4.4\nFallbackDNS=1.1.1.1\n' > /etc/systemd/resolved.conf.d/99-fallback.conf
     systemctl restart systemd-resolved
-    sleep 3
+    sleep 2
+    timeout 5 getent hosts archive.ubuntu.com >/dev/null 2>&1 && echo "DNS OK" || echo "DNS still unreachable, continuing anyway"
   changed_when: false
 
 - name: Set hard HTTP timeout for apt (prevents indefinite stall)
