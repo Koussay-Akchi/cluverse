@@ -461,6 +461,12 @@ resources:
       networks:
         - port:
             get_resource: internal_port_1
+      user_data_format: RAW
+      user_data: |
+        #!/bin/bash
+        mkdir -p /etc/systemd/resolved.conf.d
+        printf '[Resolve]\nDNS=8.8.8.8 8.8.4.4\nFallbackDNS=1.1.1.1\n' > /etc/systemd/resolved.conf.d/99-openstack-dns.conf
+        systemctl restart systemd-resolved
       metadata:
         group: masters
 
@@ -482,6 +488,12 @@ resources:
       networks:
         - port:
             get_resource: internal_port_2
+      user_data_format: RAW
+      user_data: |
+        #!/bin/bash
+        mkdir -p /etc/systemd/resolved.conf.d
+        printf '[Resolve]\nDNS=8.8.8.8 8.8.4.4\nFallbackDNS=1.1.1.1\n' > /etc/systemd/resolved.conf.d/99-openstack-dns.conf
+        systemctl restart systemd-resolved
       metadata:
         group: workers
 
@@ -503,6 +515,12 @@ resources:
       networks:
         - port:
             get_resource: internal_port_3
+      user_data_format: RAW
+      user_data: |
+        #!/bin/bash
+        mkdir -p /etc/systemd/resolved.conf.d
+        printf '[Resolve]\nDNS=8.8.8.8 8.8.4.4\nFallbackDNS=1.1.1.1\n' > /etc/systemd/resolved.conf.d/99-openstack-dns.conf
+        systemctl restart systemd-resolved
       metadata:
         group: workers
 
@@ -524,6 +542,12 @@ resources:
       networks:
         - port:
             get_resource: internal_port_4
+      user_data_format: RAW
+      user_data: |
+        #!/bin/bash
+        mkdir -p /etc/systemd/resolved.conf.d
+        printf '[Resolve]\nDNS=8.8.8.8 8.8.4.4\nFallbackDNS=1.1.1.1\n' > /etc/systemd/resolved.conf.d/99-openstack-dns.conf
+        systemctl restart systemd-resolved
       metadata:
         group: workers
 
@@ -545,6 +569,12 @@ resources:
       networks:
         - port:
             get_resource: internal_port_5
+      user_data_format: RAW
+      user_data: |
+        #!/bin/bash
+        mkdir -p /etc/systemd/resolved.conf.d
+        printf '[Resolve]\nDNS=8.8.8.8 8.8.4.4\nFallbackDNS=1.1.1.1\n' > /etc/systemd/resolved.conf.d/99-openstack-dns.conf
+        systemctl restart systemd-resolved
       metadata:
         group: monitors
 
