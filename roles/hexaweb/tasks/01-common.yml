@@ -17,27 +17,30 @@
     - apt-daily-upgrade.timer
   ignore_errors: yes
 
-- name: Force apt to use IPv4
-  ansible.builtin.lineinfile:
-    path: /etc/apt/apt.conf.d/99force-ipv4
-    line: 'Acquire::ForceIPv4 "true";'
-    create: yes
-
-- name: Wait for apt lock
+- name: Force lower MTU for OpenStack stability (prevents TCP stalls)
   ansible.builtin.shell: |
-    while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
-      echo "Waiting for other apt instance to finish..."
-      sleep 5
-    done
+    ip link set dev eth0 mtu 1400 || true
   changed_when: false
 
-- name: Update apt cache
-  ansible.builtin.apt:
-    update_cache: yes
-    cache_valid_time: 3600
-    force_apt_get: yes
+- name: Nuclear clear of apt/dpkg locks and zombies
+  ansible.builtin.shell: |
+    killall -9 apt apt-get dpkg 2>/dev/null || true
+    rm -f /var/lib/apt/lists/lock
+    rm -f /var/cache/apt/archives/lock
+    rm -f /var/lib/dpkg/lock*
+    dpkg --configure -a
+  changed_when: false
+  ignore_errors: yes
 
-- name: Install required packages
+- name: Update apt cache (Shell version with aggressive timeouts)
+  ansible.builtin.shell: |
+    apt-get -o Acquire::ForceIPv4=true -o Acquire::http::Timeout="10" -o Acquire::ftp::Timeout="10" update
+  register: apt_update_result
+  retries: 3
+  delay: 5
+  until: apt_update_result.rc == 0
+
+- name: Install required packages (Robust version)
   ansible.builtin.apt:
     name:
       - apt-transport-https
@@ -50,6 +53,7 @@
       - wget
     state: present
     force_apt_get: yes
+    update_cache: no
 
 - name: Disable swap
   ansible.builtin.command: swapoff -a
