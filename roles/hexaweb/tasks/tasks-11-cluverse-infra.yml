@@ -39,3 +39,8 @@
   delay: 10
   register: mysql_ready
   until: mysql_ready.rc == 0
+  
+- name: Deploy Metrics Server
+  ansible.builtin.shell: kubectl apply -f /root/k8s-manifests/metrics-server.yml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
