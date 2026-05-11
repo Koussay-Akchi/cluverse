@@ -7,6 +7,7 @@
       - python3-venv
     state: present
     update_cache: yes
+    force_apt_get: yes
 
 - name: Create prophet application directory
   ansible.builtin.file:

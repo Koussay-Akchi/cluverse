@@ -1,8 +1,33 @@
----
+- name: Stop and disable unattended-upgrades
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: no
+  loop:
+    - unattended-upgrades
+    - apt-daily.timer
+    - apt-daily-upgrade.timer
+  ignore_errors: yes
+
+- name: Force apt to use IPv4
+  ansible.builtin.lineinfile:
+    path: /etc/apt/apt.conf.d/99force-ipv4
+    line: 'Acquire::ForceIPv4 "true";'
+    create: yes
+
+- name: Wait for apt lock
+  ansible.builtin.shell: |
+    while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+      echo "Waiting for other apt instance to finish..."
+      sleep 5
+    done
+  changed_when: false
+
 - name: Update apt cache
   ansible.builtin.apt:
     update_cache: yes
     cache_valid_time: 3600
+    force_apt_get: yes
 
 - name: Install required packages
   ansible.builtin.apt:
@@ -16,6 +41,7 @@
       - jq
       - wget
     state: present
+    force_apt_get: yes
 
 - name: Disable swap
   ansible.builtin.command: swapoff -a
