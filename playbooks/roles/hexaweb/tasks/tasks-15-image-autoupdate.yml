@@ -9,6 +9,7 @@
     dest: /root/smart-update-images.py
     mode: '0755'
     content: |
+      {% raw %}
       #!/usr/bin/env python3
       import subprocess
       import requests
@@ -79,6 +80,7 @@
 
       if __name__ == "__main__":
           main()
+      {% endraw %}
 
 - name: Create cron job for Smart Image Update
   ansible.builtin.cron:
