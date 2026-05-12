@@ -49,4 +49,7 @@
 - name: Configure cluster health view and load balancer
   ansible.builtin.import_playbook: 14-cluster-health-lb.yml
 
+- name: Setup periodic image auto-updates
+  ansible.builtin.import_playbook: 15-image-autoupdate.yml
+
 

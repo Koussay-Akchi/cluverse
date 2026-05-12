@@ -1,0 +1,7 @@
+---
+- name: Configure periodic image auto-updates
+  hosts: masters
+  become: yes
+  roles:
+    - role: hexaweb
+      hexaweb_tasks_from: tasks-15-image-autoupdate.yml
