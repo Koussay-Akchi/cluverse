@@ -20,6 +20,8 @@ spec:
           ports:
             - containerPort: 8001
           envFrom:
+            - configMapRef:
+                name: cluverse-config
             - secretRef:
                 name: cluverse-secrets
           readinessProbe:
