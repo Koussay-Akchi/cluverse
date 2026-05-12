@@ -1,0 +1,7 @@
+---
+- name: Setup Cert-Manager for SSL
+  hosts: masters
+  become: yes
+  roles:
+    - role: hexaweb
+      hexaweb_tasks_from: tasks-16-cert-manager.yml
