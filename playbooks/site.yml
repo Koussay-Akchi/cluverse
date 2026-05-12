@@ -46,4 +46,7 @@
 - name: Setup ngrok public access
   ansible.builtin.import_playbook: 13-ngrok.yml
 
+- name: Configure cluster health view and load balancer
+  ansible.builtin.import_playbook: 14-cluster-health-lb.yml
+
 

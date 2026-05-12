@@ -1,0 +1,7 @@
+---
+- name: Configure cluster health view and load balancer
+  hosts: masters
+  become: yes
+  roles:
+    - role: hexaweb
+      hexaweb_tasks_from: tasks-14-cluster-health-lb.yml

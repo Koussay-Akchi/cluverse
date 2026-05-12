@@ -1,0 +1,61 @@
+---
+- name: Create k8s-manifests directory on master
+  ansible.builtin.file:
+    path: /root/k8s-manifests
+    state: directory
+    mode: '0755'
+
+- name: Copy all K8s manifests to master
+  ansible.builtin.copy:
+    src: "../../../../k8s/"
+    dest: /root/k8s-manifests/
+    mode: '0644'
+
+- name: Check Kubernetes Dashboard service
+  ansible.builtin.shell: kubectl -n kubernetes-dashboard get svc kubernetes-dashboard
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: dashboard_service_check
+  failed_when: false
+  changed_when: false
+
+- name: Deploy Kubernetes Dashboard
+  ansible.builtin.shell: kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: dashboard_service_check.rc != 0
+
+- name: Configure Kubernetes Dashboard admin access
+  ansible.builtin.shell: kubectl apply -f /root/k8s-manifests/kubernetes-dashboard.yml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Set Kubernetes Dashboard service type to LoadBalancer
+  ansible.builtin.shell: kubectl -n kubernetes-dashboard patch svc kubernetes-dashboard -p '{"spec":{"type":"LoadBalancer"}}'
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Check ingress load balancer service
+  ansible.builtin.shell: kubectl -n cluverse get svc ingress-proxy-lb
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: ingress_lb_check
+  failed_when: false
+  changed_when: false
+
+- name: Deploy ingress load balancer service
+  ansible.builtin.shell: kubectl apply -f /root/k8s-manifests/ingress-proxy-loadbalancer.yml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: ingress_lb_check.rc != 0
+
+- name: Check pod CPU RAM and storage limits
+  ansible.builtin.shell: kubectl -n cluverse get deploy -o jsonpath='{range .items[*]}{.metadata.name}:{.spec.template.spec.containers[0].resources.requests.cpu},{.spec.template.spec.containers[0].resources.requests.memory},{.spec.template.spec.containers[0].resources.requests.ephemeral-storage},{.spec.template.spec.containers[0].resources.limits.cpu},{.spec.template.spec.containers[0].resources.limits.memory},{.spec.template.spec.containers[0].resources.limits.ephemeral-storage}{"\n"}{end}'
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: cluverse_resource_limits
+  changed_when: false
+
+- name: Show resource limits check
+  ansible.builtin.debug:
+    var: cluverse_resource_limits.stdout_lines
