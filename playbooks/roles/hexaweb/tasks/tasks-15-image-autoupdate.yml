@@ -1,0 +1,89 @@
+---
+- name: Install python3-requests for smart image checking
+  ansible.builtin.package:
+    name: python3-requests
+    state: present
+
+- name: Create Smart Image Update Script (Python)
+  ansible.builtin.copy:
+    dest: /root/smart-update-images.py
+    mode: '0755'
+    content: |
+      #!/usr/bin/env python3
+      import subprocess
+      import requests
+      import json
+      import sys
+      import re
+
+      NAMESPACE = "cluverse"
+
+      def get_running_digest(deploy_name):
+          cmd = f"kubectl get pods -n {NAMESPACE} -l app={deploy_name} -o json"
+          result = subprocess.run(cmd.split(), capture_output=True, text=True)
+          if result.returncode != 0: return None
+          data = json.loads(result.stdout)
+          if not data['items']: return None
+          # Get the imageID which contains the digest
+          image_id = data['items'][0]['status']['containerStatuses'][0]['imageID']
+          # Format: docker-pullable://repo@sha256:hash
+          if "@sha256:" in image_id:
+              return image_id.split("@sha256:")[1]
+          return None
+
+      def get_registry_digest(image_name):
+          # For Docker Hub public images
+          repo = image_name.split(':')[0]
+          if '/' not in repo: repo = f"library/{repo}"
+          
+          # Get token
+          token_url = f"https://auth.docker.io/token?service=registry.docker.io&scope=repository:{repo}:pull"
+          r = requests.get(token_url)
+          token = r.json().get('token')
+          
+          # Get manifest digest
+          manifest_url = f"https://registry-1.docker.io/v2/{repo}/manifests/latest"
+          headers = {
+              "Authorization": f"Bearer {token}",
+              "Accept": "application/vnd.docker.distribution.manifest.v2+json"
+          }
+          r = requests.get(manifest_url, headers=headers)
+          return r.headers.get('Docker-Content-Digest', '').replace('sha256:', '')
+
+      def main():
+          # Get all deployments
+          cmd = f"kubectl get deployments -n {NAMESPACE} -o jsonpath='{{.items[*].metadata.name}}'"
+          result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+          deployments = result.stdout.split()
+
+          for deploy in deployments:
+              # Get image name
+              cmd = f"kubectl get deployment {deploy} -n {NAMESPACE} -o jsonpath='{{.spec.template.spec.containers[0].image}}'"
+              img_result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+              image = img_result.stdout.strip()
+              
+              if not image or ":latest" not in image and "@" not in image:
+                  continue # Only track latest tags
+
+              print(f"Checking {deploy} ({image})...")
+              
+              running = get_running_digest(deploy)
+              registry = get_registry_digest(image)
+
+              if registry and running and registry != running:
+                  print(f"  -> NEW IMAGE DETECTED! (Registry: {registry[:12]}, Running: {running[:12]})")
+                  print(f"  -> Restarting {deploy}...")
+                  subprocess.run(f"kubectl rollout restart deployment/{deploy} -n {NAMESPACE}", shell=True)
+              else:
+                  print(f"  -> No changes (Digest: {running[:12] if running else 'unknown'})")
+
+      if __name__ == "__main__":
+          main()
+
+- name: Create cron job for Smart Image Update
+  ansible.builtin.cron:
+    name: "Smart Docker image update check"
+    minute: "*/30"
+    user: root
+    job: "/usr/bin/python3 /root/smart-update-images.py >> /var/log/smart-image-update.log 2>&1"
+
