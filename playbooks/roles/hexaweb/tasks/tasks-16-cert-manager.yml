@@ -1,0 +1,38 @@
+---
+- name: Install Cert-Manager CRDs and manifests
+  ansible.builtin.shell: |
+    kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.12.0/cert-manager.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Wait for Cert-Manager pods to be ready
+  ansible.builtin.shell: |
+    kubectl -n cert-manager wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager --timeout=180s
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  retries: 3
+  delay: 10
+
+- name: Copy ClusterIssuer manifest to master
+  ansible.builtin.copy:
+    src: "../../../../k8s/cluster-issuer.yml"
+    dest: /root/k8s-manifests/cluster-issuer.yml
+    mode: '0644'
+
+- name: Apply ClusterIssuer
+  ansible.builtin.shell: |
+    kubectl apply -f /root/k8s-manifests/cluster-issuer.yml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Copy Certificate manifest to master
+  ansible.builtin.copy:
+    src: "../../../../k8s/certificate.yml"
+    dest: /root/k8s-manifests/certificate.yml
+    mode: '0644'
+
+- name: Apply Certificate
+  ansible.builtin.shell: |
+    kubectl apply -f /root/k8s-manifests/certificate.yml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
