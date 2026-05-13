@@ -1,0 +1,36 @@
+---
+- name: Ensure cloudflare_tunnel_token is defined
+  ansible.builtin.fail:
+    msg: "Please provide cloudflare_tunnel_token (e.g. -e 'cloudflare_tunnel_token=EY...') or set it in your vars."
+  when: cloudflare_tunnel_token is not defined or cloudflare_tunnel_token == ""
+
+- name: Copy Cloudflare Tunnel manifest to master
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/../k8s/cloudflare-tunnel.yml"
+    dest: /root/k8s-manifests/cloudflare-tunnel.yml
+    mode: '0644'
+
+- name: Deploy Cloudflare Tunnel to K8s
+  ansible.builtin.shell: kubectl apply -f /root/k8s-manifests/cloudflare-tunnel.yml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Wait for Cloudflare Tunnel to be ready
+  ansible.builtin.shell: kubectl -n cluverse wait --for=condition=ready pod -l app=cloudflared --timeout=60s
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Stop ngrok if it was running
+  ansible.builtin.shell: pkill ngrok || true
+  ignore_errors: yes
+
+- name: Check cloudflared logs
+  ansible.builtin.shell: kubectl -n cluverse logs -l app=cloudflared --tail=20
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: cloudflared_logs
+  changed_when: false
+
+- name: Debug Cloudflare Tunnel status
+  ansible.builtin.debug:
+    var: cloudflared_logs.stdout_lines

@@ -16,6 +16,7 @@ spec:
       containers:
         - name: cashflow-ai-engine
           image: akchikoussay/cashflow-ai-engine:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8091
           env:

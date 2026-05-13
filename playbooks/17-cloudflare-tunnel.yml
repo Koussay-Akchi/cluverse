@@ -1,0 +1,12 @@
+---
+- name: Setup Cloudflare Tunnel for Cluverse.tn
+  hosts: master
+  become: yes
+  vars:
+    # This should be passed via --extra-vars "cloudflare_tunnel_token=..."
+    # or defined in group_vars/all.yml
+    # cloudflare_tunnel_token: ""
+
+  tasks:
+    - name: Run Cloudflare Tunnel tasks
+      ansible.builtin.include_tasks: roles/hexaweb/tasks/tasks-17-cloudflare.yml

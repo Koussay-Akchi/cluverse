@@ -3,7 +3,7 @@
 # Configuration
 NAMESPACE="cluverse"
 HPA_NAME="finance-cluverse-hpa"
-SERVICE_URL="http://finance-cluverse:8080/api/transactions"
+SERVICE_URL="http://finance-cluverse.${NAMESPACE}.svc.cluster.local:8080/api/transactions"
 LOAD_GEN_POD="hpa-load-generator"
 
 echo "=== Kubernetes HPA Load Test Tool ==="
@@ -19,6 +19,9 @@ check_hpa() {
 
 # Function to start load
 start_load() {
+    echo "Cleaning up any existing load generator..."
+    kubectl -n $NAMESPACE delete pod $LOAD_GEN_POD --ignore-not-found=true --force --grace-period=0
+
     echo "Starting load generator pod (multiple concurrent loops)..."
     kubectl -n $NAMESPACE run $LOAD_GEN_POD --image=busybox -- /bin/sh -c "for i in 1 2 3 4 5; do (while true; do wget -q -O- $SERVICE_URL > /dev/null; done &); done; wait"
     echo "Load generator started. Monitoring HPA..."
