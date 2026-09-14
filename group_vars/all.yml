@@ -3,4 +3,4 @@ ansible_user: ubuntu
 kubernetes_version: "1.35.1"
 pod_network_cidr: "10.244.0.0/16"
 master_private_ip: "10.8.1.10"
-ngrok_authtoken: "3DXSvEiIA3kch03u2UYuBuDcmBi_5QeUeG4oqe2AYQbdE9th7"
+ngrok_authtoken: ""
