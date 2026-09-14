@@ -1,6 +1,6 @@
-# Cluverse — Cloud-Native AI-Centric Club Management Platform
+# Cluverse - Cloud-Native AI-Centric Club Management Platform
 
-> **ESPRIT PI Project** — Built from the ground up by **Hexateam**.  
+> **ESPRIT PI Project** - Built from the ground up by **Hexateam**.  
 > An enterprise-grade, microservice-based, AI-powered SaaS platform designed to modernize student club operations, replace manual spreadsheets and scattered communication, and provide an all-in-one management suite backed by private cloud infrastructure and autonomous AI intelligence.
 
 ---
@@ -10,41 +10,103 @@
 <table>
   <tr>
     <td width="50%" align="center">
-      <img src="docs/images/screenshot-1.png" alt="Platform Dashboard" width="100%"/>
-      <br/><sub><b>Figure 1:</b> Cluverse Executive Dashboard & Analytics</sub>
+      <img src="images/global.png" alt="Global Architecture" width="100%"/>
+      <br/><sub><b>Global Architecture</b></sub>
     </td>
     <td width="50%" align="center">
-      <img src="docs/images/screenshot-2.png" alt="Microservices Topology" width="100%"/>
-      <br/><sub><b>Figure 2:</b> OpenStack & Kubernetes Infrastructure Topology</sub>
+      <img src="images/physical.png" alt="Physical Infrastructure" width="100%"/>
+      <br/><sub><b>Physical Infrastructure</b></sub>
+    </td>
+  </tr>
+    <tr>
+    <td align="center">
+      <img src="images/repos.png" alt="Repository Ecosystem" width="100%"/>
+      <br/><sub><b>Repository Ecosystem</b></sub>
+    </td>
+    <td align="center">
+      <img src="images/cap (15).png" alt="Infrastructure" width="100%"/>
+      <br/><sub><b>Openstack services</b></sub>
     </td>
   </tr>
   <tr>
     <td width="50%" align="center">
-      <img src="docs/images/screenshot-3.png" alt="AI Speech Analyzer" width="100%"/>
-      <br/><sub><b>Figure 3:</b> AI Interview & Speech Analyzer (Whisper v2 + Groq)</sub>
+      <img src="images/cap%20(4).png" alt="Platform Overview" width="100%"/>
+      <br/><sub><b>Platform Overview</b></sub>
     </td>
     <td width="50%" align="center">
-      <img src="docs/images/screenshot-4.png" alt="Prophet Predictive Monitoring" width="100%"/>
-      <br/><sub><b>Figure 4:</b> Predictive Monitoring with Meta Prophet & Grafana</sub>
+      <img src="images/cap%20(1).png" alt="Live AI Interview" width="100%"/>
+      <br/><sub><b>Live AI Interview</b></sub>
     </td>
   </tr>
   <tr>
     <td width="50%" align="center">
-      <img src="docs/images/screenshot-5.png" alt="Sponsorship & Finance Module" width="100%"/>
-      <br/><sub><b>Figure 5:</b> Sponsorship Outreach, Dynamic Contracts & Stripe Payments</sub>
+      <img src="images/cap%20(2).png" alt="Module Management" width="100%"/>
+      <br/><sub><b>Skills profile</b></sub>
     </td>
     <td width="50%" align="center">
-      <img src="docs/images/screenshot-6.png" alt="Alertmanager & Observability" width="100%"/>
-      <br/><sub><b>Figure 6:</b> Real-time Alertmanager Notifications & Anomaly Detection</sub>
+      <img src="images/cap%20(3).png" alt="Operational Telemetry" width="100%"/>
+      <br/><sub><b>CV analysis</b></sub>
     </td>
   </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="images/cap%20(7).png" alt="Candidate Scoring" width="100%"/>
+      <br/><sub><b>Automatic election management</b></sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="images/cap%20(8).png" alt="Election & Voting" width="100%"/>
+      <br/><sub><b>Recruitement campaigns</b></sub>
+    </td>
+  </tr>
+  
+  <tr>
+    <td width="50%" align="center">
+      <img src="images/cap%20(5).png" alt="Cluverse Dashboard" width="100%"/>
+      <br/><sub><b>Realtime elections</b></sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="images/cap%20(6).png" alt="Event & Ticket Flow" width="100%"/>
+      <br/><sub><b>Election results</b></sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="images/cap%20(9).png" alt="Sponsorship Pipeline" width="100%"/>
+      <br/><sub><b>Budget overviews</b></sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="images/cap%20(10).png" alt="Budget & Forecasting" width="100%"/>
+      <br/><sub><b>RAG financial AI assistant</b></sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="images/cap%20(11).png" alt="Logistics Fleet Management" width="100%"/>
+      <br/><sub><b>Sponsorship pipeline</b></sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="images/cap%20(12).png" alt="Member Competencies" width="100%"/>
+      <br/><sub><b>Stripe integration</b></sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="images/cap%20(13).png" alt="Grafana & Prometheus Metrics" width="100%"/>
+      <br/><sub><b>Logistics fleet management</b></sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="images/cap%20(14).png" alt="Alertmanager Notifications" width="100%"/>
+      <br/><sub><b>Telemetry and predictive AI monitoring</b></sub>
+    </td>
+  </tr>
+
 </table>
 
 ---
 
 ## Vision & Problem Statement
 
-University clubs and student organizations operate like micro-enterprises: they manage five-figure budgets, coordinate hundreds of members, organize flagship multi-day hackathons, run democratic elections, and secure corporate sponsorships. Yet almost all rely on fragmented tools — chaotic Excel spreadsheets, unstructured WhatsApp groups, manual paper contracts, and unstandardized interviews.
+University clubs and student organizations operate like micro-enterprises: they manage five-figure budgets, coordinate hundreds of members, organize flagship multi-day hackathons, run democratic elections, and secure corporate sponsorships. Yet almost all rely on fragmented tools - chaotic Excel spreadsheets, unstructured WhatsApp groups, manual paper contracts, and unstandardized interviews.
 
 **Cluverse** solves this by delivering an integrated, self-healing, multi-tenant SaaS ecosystem where intelligence is built directly into every operational module.
 
@@ -53,52 +115,56 @@ University clubs and student organizations operate like micro-enterprises: they 
 ## Key Highlights & Architecture Pillars
 
 ### 1. Private Cloud Infrastructure & Orchestration
-* **OpenStack Heat (`heat.yaml`)**: Automated provisioning of private virtual networks, subnets, routers, floating IPs, and compute instances across dedicated master, worker, and monitoring nodes.
-* **Kubernetes Cluster (v1.35.1)**: Bootstrapped with `kubeadm` and `containerd`, orchestrating pods across master and worker pools with Horizontal Pod Autoscaling (HPA) and zero-downtime rolling updates.
-* **Ingress & Secure Networking**: Unified traffic routing via **Spring Cloud Gateway**, Ingress-NGINX controllers, automated SSL/TLS certificates via **Cert-Manager (Let's Encrypt ACME)**, and global tunneling via **Cloudflare Tunnel (`cloudflared`)**.
-* **Automated CI/CD & Configuration Management**: End-to-end automation with **Ansible playbooks**, automated image polling daemon for zero-downtime container updates, and GitHub Actions integration.
+
+- **OpenStack Heat (`heat.yaml`)**: Automated provisioning of private virtual networks, subnets, routers, floating IPs, and compute instances across dedicated master, worker, and monitoring nodes.
+- **Kubernetes Cluster (v1.35.1)**: Bootstrapped with `kubeadm` and `containerd`, orchestrating pods across master and worker pools with Horizontal Pod Autoscaling (HPA) and zero-downtime rolling updates.
+- **Ingress & Secure Networking**: Unified traffic routing via **Spring Cloud Gateway**, Ingress-NGINX controllers, automated SSL/TLS certificates via **Cert-Manager (Let's Encrypt ACME)**, and global tunneling via **Cloudflare Tunnel (`cloudflared`)**.
+- **Automated CI/CD & Configuration Management**: End-to-end automation with **Ansible playbooks**, automated image polling daemon for zero-downtime container updates, and GitHub Actions integration.
 
 ### 2. Multi-Layer Observability & Predictive AI Monitoring
-* **Prometheus & Node Exporter**: Scrapes Kubernetes nodes, cluster daemons, and Spring Boot Actuator endpoints every 15s.
-* **Alertmanager**: Tiered routing for `critical` and `warning` incidents with automated HTML email dispatch via SMTP.
-* **Grafana Dashboards**: Live visualizations for cluster health, pod resource saturation, HTTP request latency, and service status.
-* **AI Predictive Anomaly Detection (Meta Prophet)**: Embedded Flask + Prophet time-series engine predicting CPU, memory, and traffic spikes ahead of time based on historical telemetry.
-* **Zabbix Integration**: Complementary enterprise host monitoring tracking hardware metrics, OS thresholds, and network connectivity.
+
+- **Prometheus & Node Exporter**: Scrapes Kubernetes nodes, cluster daemons, and Spring Boot Actuator endpoints every 15s.
+- **Alertmanager**: Tiered routing for `critical` and `warning` incidents with automated HTML email dispatch via SMTP.
+- **Grafana Dashboards**: Live visualizations for cluster health, pod resource saturation, HTTP request latency, and service status.
+- **AI Predictive Anomaly Detection (Meta Prophet)**: Embedded Flask + Prophet time-series engine predicting CPU, memory, and traffic spikes ahead of time based on historical telemetry.
+- **Zabbix Integration**: Complementary enterprise host monitoring tracking hardware metrics, OS thresholds, and network connectivity.
 
 ### 3. Integrated Microservices Architecture
-* **`eureka-server`**: Spring Cloud Netflix Eureka service registry enabling dynamic service discovery and heartbeat health checks.
-* **`api-gateway`**: High-performance gateway handling routing, CORS policies, centralized authentication, and rate limiting.
-* **`User-Cluverse`**: Account lifecycle management, role-based access control (RBAC), JWT authentication, and OAuth2 integration (Google & GitHub).
-* **`Competencies-Cluverse`**: Member skill profiles, competency evaluation sessions, and peer feedback tracking.
-* **`Elections-Cluverse`**: Democratic election workflows, candidate registration, term limits, and cryptographic weighted voting.
-* **`Events-Cluverse`**: Event publishing, ticketing, automated waiting list management, and attendee check-ins.
-* **`Finance-Cluverse`**: Club and event budget tracking, categorized expense/income ledger, and Stripe donation processing.
-* **`Logistics-Cluverse`**: Shared inventory management, vehicle fleet tracking, fuel consumption logs, and maintenance alerts.
-* **`Sponsors-Cluverse`**: Multi-stage sponsorship CRM, automated tokenized email responses, dynamic PDF contract generation, and payment portals.
-* **`Frontend-Cluverse`**: Responsive single-page application built with Angular 18.
+
+- **`eureka-server`**: Spring Cloud Netflix Eureka service registry enabling dynamic service discovery and heartbeat health checks.
+- **`api-gateway`**: High-performance gateway handling routing, CORS policies, centralized authentication, and rate limiting.
+- **`User-Cluverse`**: Account lifecycle management, role-based access control (RBAC), JWT authentication, and OAuth2 integration (Google & GitHub).
+- **`Competencies-Cluverse`**: Member skill profiles, competency evaluation sessions, and peer feedback tracking.
+- **`Elections-Cluverse`**: Democratic election workflows, candidate registration, term limits, and cryptographic weighted voting.
+- **`Events-Cluverse`**: Event publishing, ticketing, automated waiting list management, and attendee check-ins.
+- **`Finance-Cluverse`**: Club and event budget tracking, categorized expense/income ledger, and Stripe donation processing.
+- **`Logistics-Cluverse`**: Shared inventory management, vehicle fleet tracking, fuel consumption logs, and maintenance alerts.
+- **`Sponsors-Cluverse`**: Multi-stage sponsorship CRM, automated tokenized email responses, dynamic PDF contract generation, and payment portals.
+- **`Frontend-Cluverse`**: Responsive single-page application built with Angular 18.
 
 ### 4. Applied AI Services
-* **Candidate Speech & Interview Analyzer (`speech-analyzer`)**: FastAPI service utilizing OpenAI Whisper v2 and Groq Llama 3.1 to transcribe interview audio, compute words-per-minute (WPM), and provide objective scoring metrics without human bias.
-* **AI Bio Generator (`BioGenerator`)**: Generates tailored candidate and member descriptions highlighting club accomplishments and background.
-* **Cashflow Forecasting Service (`cashflow-forecast-service`)**: Time-series predictive model forecasting treasury balances, cashflow dips, and budget risks before deficits occur.
-* **Stripe Fraud Detection (`stripe-fraud-ai-detection-system`)**: Anomaly detection model screening incoming transactions for fraudulent payment characteristics.
+
+- **Candidate Speech & Interview Analyzer (`speech-analyzer`)**: FastAPI service utilizing OpenAI Whisper v2 and Groq Llama 3.1 to transcribe interview audio, compute words-per-minute (WPM), and provide objective scoring metrics without human bias.
+- **AI Bio Generator (`BioGenerator`)**: Generates tailored candidate and member descriptions highlighting club accomplishments and background.
+- **Cashflow Forecasting Service (`cashflow-forecast-service`)**: Time-series predictive model forecasting treasury balances, cashflow dips, and budget risks before deficits occur.
+- **Stripe Fraud Detection (`stripe-fraud-ai-detection-system`)**: Anomaly detection model screening incoming transactions for fraudulent payment characteristics.
 
 ---
 
 ## Tech Stack
 
-| Domain | Technologies |
-| :--- | :--- |
-| **Backend Microservices** | Java 17, Spring Boot 3.4, Spring Cloud Gateway, Spring Cloud Eureka, Spring Data JPA |
-| **AI / Machine Learning** | Python 3.11, FastAPI, Meta Prophet, PyTorch 2.9, Whisper v2, Groq API (Llama 3.1) |
-| **Frontend** | Angular 18, TypeScript, RxJS, TailwindCSS, Chart.js |
-| **Database & Caching** | MySQL 8, Redis |
-| **Cloud & Virtualization** | OpenStack (Heat Orchestration), Microsoft Azure, Linux Ubuntu (22.04 / 24.04) |
-| **Containers & Orchestration** | Docker, containerd, Kubernetes (1.35.1), Helm, Kubeadm, MetalLB |
-| **Ingress & Security** | Ingress-NGINX, Cloudflare Tunnel (`cloudflared`), Cert-Manager (Let's Encrypt), OAuth2, JWT |
-| **IaC & Automation** | Ansible, Terraform, Bash, GitHub Actions |
-| **Monitoring & Logging** | Prometheus, Alertmanager, Grafana, Meta Prophet AI Predictor, Zabbix |
-| **External Integrations** | Stripe API, Google OAuth2, GitHub OAuth2, Gmail SMTP, Twilio, Meta API |
+| Domain                         | Technologies                                                                                |
+| :----------------------------- | :------------------------------------------------------------------------------------------ |
+| **Backend Microservices**      | Java 17, Spring Boot 3.4, Spring Cloud Gateway, Spring Cloud Eureka, Spring Data JPA        |
+| **AI / Machine Learning**      | Python 3.11, FastAPI, Meta Prophet, PyTorch 2.9, Whisper v2, Groq API (Llama 3.1)           |
+| **Frontend**                   | Angular 18, TypeScript, RxJS, TailwindCSS, Chart.js                                         |
+| **Database & Caching**         | MySQL 8, Redis                                                                              |
+| **Cloud & Virtualization**     | OpenStack (Heat Orchestration), Microsoft Azure, Linux Ubuntu (22.04 / 24.04)               |
+| **Containers & Orchestration** | Docker, containerd, Kubernetes (1.35.1), Helm, Kubeadm, MetalLB                             |
+| **Ingress & Security**         | Ingress-NGINX, Cloudflare Tunnel (`cloudflared`), Cert-Manager (Let's Encrypt), OAuth2, JWT |
+| **IaC & Automation**           | Ansible, Terraform, Bash, GitHub Actions                                                    |
+| **Monitoring & Logging**       | Prometheus, Alertmanager, Grafana, Meta Prophet AI Predictor, Zabbix                        |
+| **External Integrations**      | Stripe API, Google OAuth2, GitHub OAuth2, Gmail SMTP, Twilio, Meta API                      |
 
 ---
 
@@ -149,31 +215,40 @@ ansible/
 ## Deployment Guide
 
 ### 1. Prerequisites
-* OpenStack CLI configured with `clouds.yaml` credentials.
-* Control machine with Python 3, `ansible-core` (>= 2.15), and `openstacksdk`.
-* SSH key pair deployed to OpenStack (default: `mykey` pointing to `/root/.ssh/id_ed25519`).
+
+- OpenStack CLI configured with `clouds.yaml` credentials.
+- Control machine with Python 3, `ansible-core` (>= 2.15), and `openstacksdk`.
+- SSH key pair deployed to OpenStack (default: `mykey` pointing to `/root/.ssh/id_ed25519`).
 
 ### 2. Configure Credentials
+
 Copy the secret template and populate real environment credentials:
+
 ```bash
 cp k8s/secrets.yml.example k8s/secrets.yml
 ```
+
 Update `group_vars/all.yml` and `group_vars/monitoring.yml` with your SMTP alert credentials, Grafana admin password, and authentication tokens.
 
 ### 3. One-Click Automated Deployment
+
 Run the automated deployment script:
+
 ```bash
 chmod +x yalla.sh
 ./yalla.sh
 ```
 
 `yalla.sh` performs the following automated phases:
+
 1. Validates and recreates the OpenStack Heat stack (`heat.yaml`).
 2. Clears stale SSH host keys and verifies SSH connectivity across all provisioned nodes.
 3. Executes `playbooks/site.yml` to install runtimes, bootstrap Kubernetes, apply manifests, and start the monitoring stack.
 
 ### 4. Running Individual Playbooks
+
 To run or re-apply specific stages manually:
+
 ```bash
 # Bootstrap Kubernetes cluster
 ansible-playbook playbooks/01-common.yml
@@ -195,18 +270,19 @@ ansible-playbook playbooks/12-cluverse-services.yml
 
 ---
 
-## The Team — Hexateam
+## The Team - Hexateam
 
 This project was engineered and delivered as part of the **ESPRIT PI Project** by **Hexateam**:
 
-* **[Khamlia Feriel](https://www.linkedin.com/in/khamlia-feriel-905667212/)**
-* **[Ibtissem Ben Amara](https://www.linkedin.com/in/ibtissem-ben-amara/en/)**
-* **[Koussay Akchi](https://www.linkedin.com/in/koussay-akchi/)**
-* **[Amine Mokhtar](https://www.linkedin.com/in/amine-mokhtar-679038277/)**
-* **[Louay Tlili](https://www.linkedin.com/in/louay-tlili-799228287/)**
-* **[Jihen Ghabi](https://www.linkedin.com/in/jihen-ghabi-/)**
-* **[Louay Zorai](https://www.linkedin.com/in/louay-zorai-aa5583262/)**
+- **[Khamlia Feriel](https://www.linkedin.com/in/khamlia-feriel-905667212/)**
+- **[Ibtissem Ben Amara](https://www.linkedin.com/in/ibtissem-ben-amara/en/)**
+- **[Koussay Akchi](https://www.linkedin.com/in/koussay-akchi/)**
+- **[Amine Mokhtar](https://www.linkedin.com/in/amine-mokhtar-679038277/)**
+- **[Louay Tlili](https://www.linkedin.com/in/louay-tlili-799228287/)**
+- **[Jihen Ghabi](https://www.linkedin.com/in/jihen-ghabi-/)**
+- **[Louay Zorai](https://www.linkedin.com/in/louay-zorai-aa5583262/)**
 
 Special thanks to our coaches:
-* **[Rihem Matoussi](https://www.linkedin.com/in/rihem-matoussi-228b01195/)**
-* **[Hiba Ouni](https://www.linkedin.com/in/hiba-ouni-7a639915a/)**
+
+- **[Rihem Matoussi](https://www.linkedin.com/in/rihem-matoussi-228b01195/)**
+- **[Hiba Ouni](https://www.linkedin.com/in/hiba-ouni-7a639915a/)**
